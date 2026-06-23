@@ -1,0 +1,4 @@
+sentence-transformers>=3.0.0
+hopsworks
+pymysql>=1.1.0
+sqlalchemy>=2.0.0
