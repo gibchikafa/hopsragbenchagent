@@ -4,7 +4,8 @@ Conversation history is persisted in MySQL (table: ragbench_li_chat_history).
 Each independent conversation is identified by a session_id sent in the request.
 
 Deploy:
-    hops agent create ragbench_llamaindex_agent.py --name ragbenchagent --environment ragbench-agent
+    hops agent create ragbench_llamaindex_agent.py --name ragbenchagent \
+        --requirements ragbench_llamaindex_requirements.txt --environment ragbench-agent
     hops agent start ragbenchagent --wait 600
 
 Query (single-turn):
