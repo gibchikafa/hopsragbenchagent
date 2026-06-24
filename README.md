@@ -22,29 +22,43 @@ A RAG system built on the [vectara/open_ragbench](https://huggingface.co/dataset
 
 ## Deployment
 
-### Feature pipeline
+### 1. Feature pipeline
 
-```bash
-hops job deploy ragbench-feature-pipeline feature_pipeline.py \
-  --env python-feature-pipeline --run --wait --overwrite
-```
+1. Upload `feature_pipeline.py` and `requirements_pipeline.txt` to your Hopsworks project.
+2. In the Hopsworks UI, go to **Jobs** and create a new Python job pointing to `feature_pipeline.py`. Select `python-feature-pipeline` as the environment.
+3. Run the job and wait for it to complete. This populates the `ragbench_embeddings` feature group with vector embeddings.
 
-### LlamaIndex agent
+### 2. LlamaIndex agent
 
-```bash
-hops agent create ragbench_llamaindex_agent.py --name ragbenchagent \
-  --requirements ragbench_llamaindex_requirements.txt --environment ragbench-agent
-hops agent start ragbenchagent --wait 600
-```
+**Create the environment**
 
-### LangChain agent
+Before deploying the agent, create a dedicated Python environment with the required libraries:
 
-```bash
-hops agent create ragbench_langchain_agent.py --name ragbenchlcagent \
-  --requirements ragbench_langchain_requirements.txt \
-  --environment python-agent-pipeline-meb10000-v1
-hops agent start ragbenchlcagent --wait 600
-```
+1. In the Hopsworks UI, go to **Environments** and clone the base agent environment (e.g. `python-agent-pipeline`).
+2. Name the cloned environment (e.g. `ragbench-agent`) and install `ragbench_llamaindex_requirements.txt` into it.
+3. Wait for the installation to complete.
+
+**Deploy the agent**
+
+1. In the Hopsworks UI, go to **Deployments** and create a new agent deployment.
+2. Set the predictor script to `ragbench_llamaindex_agent.py` and select the `ragbench-agent` environment created above.
+3. Set the environment variables listed in the [Environment variables](#environment-variables-agent-deployments) section below.
+4. Start the deployment and wait for it to reach the **Running** state.
+
+### 3. LangChain agent
+
+**Create the environment**
+
+1. In the Hopsworks UI, go to **Environments** and clone the base agent environment (e.g. `python-agent-pipeline`).
+2. Name the cloned environment (e.g. `ragbench-langchain-agent`) and install `ragbench_langchain_requirements.txt` into it.
+3. Wait for the installation to complete.
+
+**Deploy the agent**
+
+1. In the Hopsworks UI, go to **Deployments** and create a new agent deployment.
+2. Set the predictor script to `ragbench_langchain_agent.py` and select the `ragbench-langchain-agent` environment created above.
+3. Set the environment variables listed in the [Environment variables](#environment-variables-agent-deployments) section below.
+4. Start the deployment and wait for it to reach the **Running** state.
 
 ## Query
 
