@@ -29,7 +29,6 @@ import uvicorn
 from fastapi import FastAPI
 from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.llms import ChatMessage, MessageRole
-from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.anthropic import Anthropic
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
@@ -194,17 +193,23 @@ class RagbenchPredictor:
         if not prompt:
             return {"error": "No 'prompt' field in request."}
 
-        # Load prior turns from MySQL and inject into a per-request memory buffer.
         past_messages = self._chat_store.get_messages(session_id)
-        memory = ChatMemoryBuffer.from_defaults(
-            chat_history=past_messages,
-            token_limit=4096,
-        )
         log.info("SESSION %s: %d prior messages, QUERY: %s", session_id, len(past_messages), prompt)
 
+        # The workflow-based ReActAgent does not reliably use an injected
+        # ChatMemoryBuffer as LLM context, so we prepend history into the prompt.
+        if past_messages:
+            history_lines = [
+                f"{'User' if msg.role == MessageRole.USER else 'Assistant'}: {msg.content}"
+                for msg in past_messages
+            ]
+            full_prompt = "Conversation history:\n" + "\n".join(history_lines) + f"\n\nCurrent message: {prompt}"
+        else:
+            full_prompt = prompt
+
         self._current_sources = []
-        agent = ReActAgent(tools=self._tools, llm=self._llm, memory=memory)
-        result = await agent.run(prompt)
+        agent = ReActAgent(tools=self._tools, llm=self._llm)
+        result = await agent.run(full_prompt)
         answer = str(result)
 
         # Persist the new turn.
