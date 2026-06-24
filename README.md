@@ -14,7 +14,7 @@ A RAG system built on the [vectara/open_ragbench](https://huggingface.co/dataset
 | File | Description |
 |---|---|
 | `feature_pipeline.py` | Hopsworks feature pipeline — embeds RAGBench and writes to the feature store |
-| `ragbench_agent.py` | LlamaIndex ReActAgent deployment |
+| `ragbench_llamaindex_agent.py` | LlamaIndex ReActAgent deployment |
 | `ragbench_langchain_agent.py` | LangChain + LangGraph ReActAgent deployment |
 | `requirements_pipeline.txt` | Dependencies for the feature pipeline |
 | `requirements_agent.txt` | Dependencies for the LlamaIndex agent |
@@ -32,7 +32,7 @@ hops job deploy ragbench-feature-pipeline feature_pipeline.py \
 ### LlamaIndex agent
 
 ```bash
-hops agent create ragbench_agent.py --name ragbenchagent \
+hops agent create ragbench_llamaindex_agent.py --name ragbenchagent \
   --requirements requirements_agent.txt --environment ragbench-agent
 hops agent start ragbenchagent --wait 600
 ```
