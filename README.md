@@ -80,10 +80,4 @@ curl -s -X POST http://<istio-ip>/v1/g2/ragbenchagent/query \
 
 | Variable | Description |
 |---|---|
-| `MYSQL_USER` | MySQL username |
-| `MYSQL_PASSWORD_SECRET_NAME` | Name of the Hopsworks secret holding the MySQL password |
-| `MYSQL_HOST` | MySQL host |
-| `MYSQL_PORT` | MySQL port (default: 3306) |
-| `MYSQL_DB` | MySQL database name |
-| `DEPLOYMENT_ID` | Appended to the chat history table name to isolate deployments |
 | `ANTHROPIC_API_KEY` | API key for Claude (set as a global user environment variable) |
