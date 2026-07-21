@@ -6,7 +6,7 @@ A RAG system built on the [vectara/open_ragbench](https://huggingface.co/dataset
 
 - **Feature pipeline** — downloads the RAGBench dataset, generates 384-dim embeddings using `all-MiniLM-L6-v2`, and stores them in a Hopsworks vector-search feature group (`ragbench_embeddings`).
 - **LlamaIndex agent** — ReActAgent powered by Claude Haiku, queries the feature group for relevant passages, and answers questions.
-- **LangChain agent** — equivalent agent built with LangGraph's `create_react_agent` and Claude Haiku.
+- **LangGraph agent** — equivalent agent built with LangGraph's `create_react_agent` and Claude Haiku.
 - Both agents expose a `/query` REST endpoint and persist multi-turn conversation history in MySQL.
 
 ## Files
@@ -15,10 +15,10 @@ A RAG system built on the [vectara/open_ragbench](https://huggingface.co/dataset
 |---|---|
 | `feature_pipeline.py` | Hopsworks feature pipeline — embeds RAGBench and writes to the feature store |
 | `ragbench_llamaindex_agent.py` | LlamaIndex ReActAgent deployment |
-| `ragbench_langchain_agent.py` | LangChain + LangGraph ReActAgent deployment |
+| `ragbench_langchain_agent.py` | LangGraph ReActAgent deployment |
 | `requirements_pipeline.txt` | Dependencies for the feature pipeline |
 | `ragbench_llamaindex_requirements.txt` | Dependencies for the LlamaIndex agent |
-| `ragbench_langchain_requirements.txt` | Dependencies for the LangChain agent |
+| `ragbench_langchain_requirements.txt` | Dependencies for the LangGraph agent |
 
 ## Deployment
 
@@ -45,18 +45,18 @@ Before deploying the agent, create a dedicated Python environment with the requi
 3. Set the environment variables listed in the [Environment variables](#environment-variables-agent-deployments) section below.
 4. Start the deployment and wait for it to reach the **Running** state.
 
-### 3. LangChain agent
+### 3. LangGraph agent
 
 **Create the environment**
 
 1. In the Hopsworks UI, go to **Environments** and clone the base agent environment (e.g. `python-agent-pipeline`).
-2. Name the cloned environment (e.g. `ragbench-langchain-agent`) and install `ragbench_langchain_requirements.txt` into it.
+2. Name the cloned environment (e.g. `ragbench-langgraph-agent`) and install `ragbench_langchain_requirements.txt` into it.
 3. Wait for the installation to complete.
 
 **Deploy the agent**
 
 1. In the Hopsworks UI, go to **Deployments** and create a new agent deployment.
-2. Set the predictor script to `ragbench_langchain_agent.py` and select the `ragbench-langchain-agent` environment created above.
+2. Set the predictor script to `ragbench_langchain_agent.py` and select the `ragbench-langgraph-agent` environment created above.
 3. Set the environment variables listed in the [Environment variables](#environment-variables-agent-deployments) section below.
 4. Start the deployment and wait for it to reach the **Running** state.
 
