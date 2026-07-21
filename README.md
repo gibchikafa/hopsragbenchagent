@@ -81,3 +81,5 @@ curl -s -X POST http://<istio-ip>/v1/g2/ragbenchagent/query \
 | Variable | Description |
 |---|---|
 | `ANTHROPIC_API_KEY` | API key for Claude (set as a global user environment variable) |
+
+
