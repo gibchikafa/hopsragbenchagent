@@ -17,7 +17,6 @@ Deploy:
 """
 
 import logging
-import os
 
 import hopsworks
 from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, SqlChatMemory  # noqa: E501
