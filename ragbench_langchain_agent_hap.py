@@ -42,6 +42,9 @@ agent_app = AgentApp(
         "How does retrieval-augmented generation work?",
     ],
     placeholder="Ask about AI/ML research...",
+    # activates LangChain/LangGraph OTel instrumentation automatically when
+    # tracing is enabled on the deployment
+    framework="langgraph",
 )
 
 
