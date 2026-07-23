@@ -53,10 +53,14 @@ MAX_HISTORY_MESSAGES = 50  # last 50 messages = 25 conversation turns
 
 
 def _build_tracer_provider():
-    endpoint = os.environ.get(
-        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-        "http://localhost:4318/v1/traces",
-    )
+    # The platform injects this env var (and runs the OTLP sidecar) only when
+    # tracing is enabled on the deployment. Without it there is nothing
+    # listening on localhost:4318 — exporting would just spam connection
+    # errors on every request.
+    endpoint = os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+    if endpoint is None:
+        log.info("Tracing disabled (no OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)")
+        return None
     tp = trace_sdk.TracerProvider()
     tp.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
     return tp
@@ -117,7 +121,8 @@ class MySQLChatStore:
 class RagbenchLCPredictor:
     def __init__(self):
         self._tracer_provider = _build_tracer_provider()
-        LangChainInstrumentor().instrument(tracer_provider=self._tracer_provider)
+        if self._tracer_provider is not None:
+            LangChainInstrumentor().instrument(tracer_provider=self._tracer_provider)
 
         # ── feature store ────────────────────────────────────────────────────
         project = hopsworks.login()
