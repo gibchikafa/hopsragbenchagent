@@ -20,7 +20,7 @@ import logging
 import os
 
 import hopsworks
-from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, SqlChatMemory
+from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, SqlChatMemory  # noqa: E501
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
@@ -34,16 +34,6 @@ FG_NAME = "ragbench_embeddings"
 FG_VERSION = 1
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 TOP_K = 6
-
-
-def _mysql_url() -> str:
-    secret_name = os.environ["MYSQL_PASSWORD_SECRET_NAME"]
-    password = hopsworks.get_secrets_api().get(secret_name)
-    user = os.environ["MYSQL_USER"]
-    host = os.environ["MYSQL_HOST"]
-    port = os.environ.get("MYSQL_PORT", "3306")
-    db = os.environ["MYSQL_DB"]
-    return f"mysql+pymysql://{user}:{password}@{host}:{port}/{db}"
 
 
 # ── domain setup (module level, once) ────────────────────────────────────────
@@ -98,7 +88,6 @@ agent = create_react_agent(llm, [search_papers])
 
 # ── the protocol app: manifest + endpoints + tracing + memory ────────────────
 
-deployment_id = os.environ.get("DEPLOYMENT_ID", "local")
 agent_app = AgentApp(
     name="RAGBench agent (native)",
     description="RAG agent over the RAGBench academic paper corpus "
@@ -111,9 +100,9 @@ agent_app = AgentApp(
         "How does retrieval-augmented generation work?",
     ],
     placeholder="Ask about AI/ML research...",
-    memory=SqlChatMemory(
-        _mysql_url(), table_name=f"ragbench_native_memory_{deployment_id}"
-    ),
+    # zero-config: project MySQL from the platform-injected MYSQL_* env
+    # vars, table name derived from DEPLOYMENT_ID
+    memory=SqlChatMemory(),
 )
 
 
