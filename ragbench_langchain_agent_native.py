@@ -104,6 +104,8 @@ agent_app = AgentApp(
     memory=SqlChatMemory(),
     # surface tool calls as progress chips in the chat panel
     tool_events=True,
+    # show the agent's structure in the panel's Graph tab
+    graph=agent,
 )
 
 
