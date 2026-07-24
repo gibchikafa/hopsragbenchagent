@@ -100,6 +100,10 @@ agent_app = AgentApp(
     placeholder="Ask about AI/ML research...",
     memory=SqlChatMemory(),
     tool_events=True,
+    # ReActAgent is a LlamaIndex Workflow — the SDK derives its graph from the
+    # @step methods (prebuilt agents show the framework's ReAct workflow;
+    # custom workflows show your own step graph)
+    graph=ReActAgent(tools=tools, llm=llm),
 )
 
 
