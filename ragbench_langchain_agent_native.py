@@ -102,13 +102,19 @@ agent_app = AgentApp(
     # zero-config: project MySQL from the platform-injected MYSQL_* env
     # vars, table name derived from DEPLOYMENT_ID
     memory=SqlChatMemory(),
+    # surface tool calls as progress chips in the chat panel
+    tool_events=True,
 )
 
 
 @agent_app.stream
-async def stream(request):
+async def stream(request, ctx):
     """One handler serves both endpoints: /v1/chat/stream emits each yielded
-    token as a message.delta; /v1/chat collects them into a single reply."""
+    token as a message.delta; /v1/chat collects them into a single reply.
+
+    Tool calls are surfaced live: LangGraph's astream_events already reports
+    on_tool_start / on_tool_end, which map to tool_event chips (keyed by the
+    tool's run_id so start and end collapse into one chip)."""
     if not request.text:
         raise AgentError(
             "The message content cannot be empty.",
@@ -116,16 +122,15 @@ async def stream(request):
             status_code=400,
         )
 
-    # history: recorded automatically by the SDK after each turn, in the
-    # {"role", "content"} shape LangGraph accepts directly
-    history = agent_app.memory.get(request.conversation_id)
+    history = ctx.history  # SDK-managed conversation memory
     _current_sources.clear()
 
     async for event in agent.astream_events(
         {"messages": history + [HumanMessage(content=request.text)]},
         version="v2",
     ):
-        if event["event"] == "on_chat_model_stream":
+        kind = event["event"]
+        if kind == "on_chat_model_stream":
             chunk = event["data"]["chunk"].content
             # Anthropic content is a string or a list of content blocks
             if isinstance(chunk, str):
@@ -135,6 +140,22 @@ async def stream(request):
                 for block in chunk:
                     if isinstance(block, dict) and block.get("type") == "text":
                         yield block.get("text", "")
+        elif kind == "on_tool_start":
+            query = (event.get("data") or {}).get("input")
+            await ctx.emit_event(
+                event["name"],
+                status="running",
+                message=str(query) if query else None,
+                event_id=event["run_id"],
+            )
+        elif kind == "on_tool_end":
+            await ctx.emit_event(
+                event["name"], status="done", event_id=event["run_id"]
+            )
+        elif kind == "on_tool_error":
+            await ctx.emit_event(
+                event["name"], status="failed", event_id=event["run_id"]
+            )
 
     # citations ride on the final message.completed event
     yield AgentResponse.parts(
