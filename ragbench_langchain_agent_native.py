@@ -112,9 +112,8 @@ async def stream(request, ctx):
     """One handler serves both endpoints: /v1/chat/stream emits each yielded
     token as a message.delta; /v1/chat collects them into a single reply.
 
-    Tool calls are surfaced live: LangGraph's astream_events already reports
-    on_tool_start / on_tool_end, which map to tool_event chips (keyed by the
-    tool's run_id so start and end collapse into one chip)."""
+    ctx.stream_langchain pipes LangGraph's astream_events through, yielding
+    text deltas and turning tool calls into tool_event chips automatically."""
     if not request.text:
         raise AgentError(
             "The message content cannot be empty.",
@@ -125,37 +124,13 @@ async def stream(request, ctx):
     history = ctx.history  # SDK-managed conversation memory
     _current_sources.clear()
 
-    async for event in agent.astream_events(
-        {"messages": history + [HumanMessage(content=request.text)]},
-        version="v2",
+    async for delta in ctx.stream_langchain(
+        agent.astream_events(
+            {"messages": history + [HumanMessage(content=request.text)]},
+            version="v2",
+        )
     ):
-        kind = event["event"]
-        if kind == "on_chat_model_stream":
-            chunk = event["data"]["chunk"].content
-            # Anthropic content is a string or a list of content blocks
-            if isinstance(chunk, str):
-                if chunk:
-                    yield chunk
-            elif isinstance(chunk, list):
-                for block in chunk:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        yield block.get("text", "")
-        elif kind == "on_tool_start":
-            query = (event.get("data") or {}).get("input")
-            await ctx.emit_event(
-                event["name"],
-                status="running",
-                message=str(query) if query else None,
-                event_id=event["run_id"],
-            )
-        elif kind == "on_tool_end":
-            await ctx.emit_event(
-                event["name"], status="done", event_id=event["run_id"]
-            )
-        elif kind == "on_tool_error":
-            await ctx.emit_event(
-                event["name"], status="failed", event_id=event["run_id"]
-            )
+        yield delta
 
     # citations ride on the final message.completed event
     yield AgentResponse.parts(
