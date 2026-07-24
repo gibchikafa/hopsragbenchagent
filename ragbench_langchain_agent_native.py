@@ -4,7 +4,7 @@ RAGBench LangChain agent — native Hopsworks Agent Protocol implementation.
 Fully standalone (no import from ragbench_langchain_agent.py): the SDK owns
 the HTTP surface (manifest, /v1/chat, /v1/chat/stream, /health, CORS),
 tracing (LangChain instrumentation activates automatically when tracing is
-enabled on the deployment), and conversation memory (SqlChatMemory on the
+enabled on the deployment), and conversation memory (PersistentAgentMemory on the
 project MySQL, keyed by the protocol's conversation_id). The agent code is
 only the domain: retrieval tool + LangGraph ReAct agent + one streaming
 handler that yields tokens as they are generated.
@@ -19,7 +19,7 @@ Deploy:
 import logging
 
 import hopsworks
-from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, SqlChatMemory  # noqa: E501
+from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, PersistentAgentMemory  # noqa: E501
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
@@ -101,7 +101,7 @@ agent_app = AgentApp(
     placeholder="Ask about AI/ML research...",
     # zero-config: project MySQL from the platform-injected MYSQL_* env
     # vars, table name derived from DEPLOYMENT_ID
-    memory=SqlChatMemory(),
+    memory=PersistentAgentMemory(),
     # surface tool calls as progress chips in the chat panel
     tool_events=True,
     # show the agent's structure in the panel's Graph tab

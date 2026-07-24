@@ -4,7 +4,7 @@ RAGBench LlamaIndex agent — native Hopsworks Agent Protocol implementation.
 Standalone (no import from ragbench_llamaindex_agent.py): the SDK owns the HTTP
 surface (manifest, /v1/chat, /v1/chat/stream, /health, CORS), tracing
 (LlamaIndex instrumentation activates automatically when tracing is enabled on
-the deployment), and conversation memory (SqlChatMemory on the project MySQL,
+the deployment), and conversation memory (PersistentAgentMemory on the project MySQL,
 keyed by the protocol's conversation_id). The agent code is only the domain:
 retrieval tool + LlamaIndex ReActAgent + one streaming handler.
 
@@ -21,7 +21,7 @@ Deploy:
 import logging
 
 import hopsworks
-from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, SqlChatMemory  # noqa: E501
+from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, PersistentAgentMemory  # noqa: E501
 from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.anthropic import Anthropic
@@ -98,7 +98,7 @@ agent_app = AgentApp(
         "How does retrieval-augmented generation work?",
     ],
     placeholder="Ask about AI/ML research...",
-    memory=SqlChatMemory(),
+    memory=PersistentAgentMemory(),
     tool_events=True,
     # ReActAgent is a LlamaIndex Workflow — the SDK derives its graph from the
     # @step methods (prebuilt agents show the framework's ReAct workflow;
