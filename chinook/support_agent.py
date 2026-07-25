@@ -50,6 +50,7 @@ from hopsworks_agent_protocol import (  # noqa: E501
     PersistentAgentMemory,
     anthropic_summarizer,
     memory_tools,
+    remember,
 )
 from langchain_anthropic import ChatAnthropic
 from langchain_core.tools import tool
@@ -556,6 +557,68 @@ qa_graph = create_react_agent(
 # ── supervisor ───────────────────────────────────────────────────────────────
 
 
+IDENTITY_KEYS = ("customer_first_name", "customer_last_name", "customer_phone")
+
+IDENTIFY_INSTRUCTIONS = """You are the front desk of an online music store. Your only \
+job right now is to work out who you are speaking to. From the conversation so far, \
+extract the customer's first name, last name, and the phone number on their account. \
+Do not guess or invent any of them — leave a field null if the customer has not said \
+it. Do not answer any other question yet."""
+
+
+class CustomerIdentity(TypedDict):
+    """Who the customer is. Leave a field null when they have not said it."""
+
+    customer_first_name: str | None
+    customer_last_name: str | None
+    customer_phone: str | None
+
+
+identity_llm = ChatAnthropic(
+    model=ROUTER_MODEL, max_tokens=512, temperature=0.0
+).with_structured_output(CustomerIdentity, include_raw=True)
+
+ASK_FOR_IDENTITY = (
+    "Before we start — could you give me your first name, last name, and the "
+    "phone number on your account? I'll remember them, so you won't have to "
+    "tell me again next time."
+)
+
+
+async def identify(state: State) -> Command[Literal["intent_classifier", "__end__"]]:
+    """Establish who we are talking to before doing any work.
+
+    A returning customer never sees this: the handler seeds the graph state
+    from durable memory, so all three fields are already present and the node
+    falls straight through. It only asks the first time, and what it learns is
+    stored under the `user` scope — which is the whole demonstration. The
+    refund flow downstream then never has to ask for identity again either.
+    """
+    if all(state.get(key) for key in IDENTITY_KEYS):
+        return Command(goto="intent_classifier")
+
+    info = await identity_llm.ainvoke(
+        [{"role": "system", "content": IDENTIFY_INSTRUCTIONS}, *state["messages"]]
+    )
+    parsed = info["parsed"] or {}
+    if all(parsed.get(key) for key in IDENTITY_KEYS):
+        for key in IDENTITY_KEYS:
+            # `user` scope: durable across every future conversation for this
+            # subject, and auto-injected via ctx.system_context()
+            remember(key, str(parsed[key]))
+        return Command(update={"messages": [info["raw"]], **parsed},
+                       goto="intent_classifier")
+
+    return Command(
+        update={
+            "messages": [{"role": "assistant", "content": ASK_FOR_IDENTITY}],
+            "followup": ASK_FOR_IDENTITY,
+            **{k: v for k, v in parsed.items() if v},
+        },
+        goto=END,
+    )
+
+
 class UserIntent(TypedDict):
     """The user's current intent in the conversation."""
 
@@ -596,11 +659,12 @@ def compile_followup(state: State) -> dict:
 
 
 _builder = StateGraph(State)
+_builder.add_node(identify)
 _builder.add_node(intent_classifier)
 _builder.add_node("refund_agent", refund_graph)
 _builder.add_node("question_answering_agent", qa_graph)
 _builder.add_node(compile_followup)
-_builder.set_entry_point("intent_classifier")
+_builder.set_entry_point("identify")
 _builder.add_edge("refund_agent", "compile_followup")
 _builder.add_edge("question_answering_agent", "compile_followup")
 _builder.add_edge("compile_followup", END)
@@ -613,9 +677,13 @@ SYSTEM_PROMPT = """\
 You are a customer support agent for an online music store. Answer questions about \
 the catalogue, and help customers get refunds on tracks they bought.
 
-When a customer tells you something that will still be true next time — their name, \
-their phone number, how they prefer to be addressed — store it with `remember` so \
-they do not have to repeat it. Do not store catalogue facts there; look those up.\
+You are told below what you already know about this customer. Never ask again for \
+anything that appears there - greet a returning customer by name and carry on. If a \
+detail is missing, ask for it once, then remember it.
+
+When a customer tells you something else that will still be true next time - how \
+they prefer to be addressed, that they want refunds as store credit - store it \
+with `remember`. Do not store catalogue facts there; look those up.\
 """
 
 agent_app = AgentApp(
@@ -624,7 +692,8 @@ agent_app = AgentApp(
     "and refunds (LangGraph supervisor + Hopsworks feature store lookup).",
     framework="langgraph",
     welcome_message="Hi! I can answer questions about our catalogue or help you "
-    "with a refund.",
+    "with a refund. First time here I'll ask who you are - after that "
+    "I'll remember.",
     suggested_prompts=[
         "What albums do you have by Led Zeppelin?",
         "Who are the artists similar to Prince?",
@@ -657,8 +726,15 @@ async def stream(request, ctx):
     messages += ctx.history  # turns since the last fold
     messages.append({"role": "user", "content": request.text})
 
+    # Seed the graph with whatever we already know about this customer. This is
+    # what makes the identity gate a one-time ask rather than a per-conversation
+    # one: `user`-scoped state outlives the conversation, so a returning
+    # customer arrives already identified and `identify` falls straight through.
+    known = ctx.state("user")
+    identity = {key: known[key] for key in IDENTITY_KEYS if known.get(key)}
+
     async for delta in ctx.stream_langchain(
-        graph.astream_events({"messages": messages}, version="v2")
+        graph.astream_events({"messages": messages, **identity}, version="v2")
     ):
         yield delta
 
