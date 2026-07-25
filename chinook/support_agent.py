@@ -103,6 +103,17 @@ _current_identity: contextvars.ContextVar[dict] = contextvars.ContextVar(
     "chinook_identity", default={}
 )
 
+# Durable, cross-conversation memory is keyed on the customer, not the
+# conversation — using the same customer_key the purchases feature group is
+# keyed on. The agent asks for name and phone anyway, so the application can
+# decide what identity means rather than waiting for the platform to provide
+# one. It is a client-asserted identity (a customer could claim to be someone
+# else), but that is already the trust model for looking up their orders, so
+# this adds no authority they did not have.
+INTEREST_SCOPE = "user"
+WANTS_PREFIX = "wants:"
+LIKES_PREFIX = "likes:"
+
 
 # ── data access ──────────────────────────────────────────────────────────────
 
@@ -632,6 +643,118 @@ def purchase_history(
     return list(albums.values())
 
 
+def _interest_owner(identity: dict | None = None) -> str | None:
+    """The durable-memory owner for the customer in this turn, or None."""
+    identity = identity if identity is not None else _current_identity.get()
+    if not all(identity.get(key) for key in IDENTITY_KEYS):
+        return None
+    return customer_key(
+        identity["customer_first_name"],
+        identity["customer_last_name"],
+        identity["customer_phone"],
+    )
+
+
+@tool
+def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
+    """Record something the customer feels about an album, artist or track.
+
+    Call this the moment they express either:
+      - `wants_to_buy` — they intend to buy it, are thinking about it, or ask
+        how to get it. You will be reminded next time so you can follow up.
+      - `likes` — they simply enjoy it, with no intent to buy. Use this for
+        taste, so recommendations can be tailored later.
+
+    Use their words for `item` (an album, artist or track name). Do not use
+    this for anything they have already bought — that is in their order
+    history.
+    """
+    memory, ctx = _memory_and_ctx()
+    owner = _interest_owner()
+    if memory is None or owner is None:
+        return "I can't store that yet — I don't know who I'm speaking to."
+    prefix = WANTS_PREFIX if kind == "wants_to_buy" else LIKES_PREFIX
+    memory.set_state(
+        INTEREST_SCOPE,
+        owner,
+        f"{prefix}{item.strip()}",
+        json.dumps({"item": item.strip(), "noted_at": _today()}),
+        source_ref=json.dumps(
+            {"conversation_id": ctx.conversation_id, "turn_id": ctx.turn_id}
+        ),
+    )
+    return f"Noted that they {kind.replace('_', ' ')} {item.strip()!r}."
+
+
+def _memory_and_ctx():
+    """The active store and request context, resolved the way the SDK's own
+    memory tools do — a tool is called by the model and is handed neither."""
+    from hopsworks_agent_protocol.autoevents import current_context
+
+    ctx = current_context.get(None)
+    if ctx is None or ctx.memory is None:
+        return None, None
+    return ctx.memory, ctx
+
+
+def _today() -> str:
+    return pd.Timestamp.utcnow().strftime("%Y-%m-%d")
+
+
+def interests_block(memory, identity: dict) -> str:
+    """What we remember about this customer, checked against what they bought.
+
+    This is the part worth watching: an intention lives in agent memory, the
+    purchase lives in the feature store, and the two are reconciled here. A
+    want that has since been fulfilled is reported as fulfilled rather than
+    nagged about.
+    """
+    owner = _interest_owner(identity)
+    if memory is None or owner is None:
+        return ""
+    rows = memory.list_state(INTEREST_SCOPE, owner)
+    wants = [r for r in rows if r["key"].startswith(WANTS_PREFIX)]
+    likes = [r for r in rows if r["key"].startswith(LIKES_PREFIX)]
+    if not wants and not likes:
+        return ""
+
+    owned = {
+        (album["album_title"] or "").lower()
+        for album in _purchased_albums(identity)
+    }
+
+    lines = []
+    for row in wants:
+        item = row["key"][len(WANTS_PREFIX):]
+        canonical = resolve_name(item, "album")
+        bought = canonical.lower() in owned or item.lower() in owned
+        lines.append(
+            f"- wanted to buy {item!r} — {'HAS SINCE BOUGHT IT' if bought else 'still not purchased'}"
+        )
+    for row in likes:
+        lines.append(f"- likes {row['key'][len(LIKES_PREFIX):]!r}")
+    return (
+        "\n\nFrom earlier conversations with this customer:\n"
+        + "\n".join(lines)
+        + "\nIf it fits naturally, follow up on anything they wanted to buy — "
+        "congratulate them if they bought it, or offer to help if they did not. "
+        "Mention it once; do not nag.\n"
+    )
+
+
+def _purchased_albums(identity: dict) -> list[dict]:
+    previous = _current_identity.get()
+    _current_identity.set(identity)
+    try:
+        result = purchase_history.invoke({})
+    except Exception:  # noqa: BLE001 — a check-in must never fail the turn
+        log.exception("Could not read purchases while reconciling interests")
+        result = []
+    finally:
+        _current_identity.set(previous)
+    return result if isinstance(result, list) else []
+
+
 qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
 # The memory tools go in the same list: a support agent that remembers a
 # returning customer's name and phone number is the whole point of durable
@@ -644,6 +767,7 @@ qa_graph = create_react_agent(
         lookup_artist,
         lookup_album,
         purchase_history,
+        remember_interest,
         *memory_tools("langgraph"),
     ],
 )
@@ -815,9 +939,12 @@ You are told below what you already know about this customer. Never ask again fo
 anything that appears there - use it and carry on. If a detail is missing, ask for \
 it once, then remember it for the rest of this conversation.
 
-When a customer tells you something else that will still be true next time - how \
-they prefer to be addressed, that they want refunds as store credit - store it \
-with `remember`. Do not store catalogue facts there; look those up.\
+When a customer says they want to buy something, or that they simply like an \
+album or artist, record it with `remember_interest`. That outlives the \
+conversation, so next time you can pick the thread back up. Anything else that \
+stays true - how they prefer to be addressed, that they want refunds as store \
+credit - goes in `remember`. Do not store catalogue facts in either; look \
+those up.\
 """
 
 agent_app = AgentApp(
@@ -855,7 +982,18 @@ async def stream(request, ctx):
 
     # ctx.system_context() carries the rolling summary of compacted turns plus
     # what the agent has stored about this customer; "" until there is any.
-    messages = [{"role": "system", "content": SYSTEM_PROMPT + ctx.system_context()}]
+    known = ctx.state(IDENTITY_SCOPE)
+    identity = {key: known[key] for key in IDENTITY_KEYS if known.get(key)}
+    # published for the tools, which the model calls without graph state
+    _current_identity.set(identity)
+
+    system = SYSTEM_PROMPT + ctx.system_context()
+    # What we remember about this customer from previous conversations,
+    # reconciled against what they actually bought. Keyed on the customer, so
+    # unlike ctx.system_context() this survives a new conversation.
+    system += interests_block(ctx.memory, identity)
+
+    messages = [{"role": "system", "content": system}]
     messages += ctx.history  # turns since the last fold
     messages.append({"role": "user", "content": request.text})
 
@@ -863,11 +1001,6 @@ async def stream(request, ctx):
     # what makes the identity gate a one-time ask rather than a per-conversation
     # one: `user`-scoped state outlives the conversation, so a returning
     # customer arrives already identified and `identify` falls straight through.
-    known = ctx.state(IDENTITY_SCOPE)
-    identity = {key: known[key] for key in IDENTITY_KEYS if known.get(key)}
-    # published for purchase_history, which the model calls without graph state
-    _current_identity.set(identity)
-
     # Not every reply comes from a model. `identify` asks for details, `lookup`
     # renders the purchase table and `refund` confirms the amount — all written
     # straight into graph state by a node. ctx.stream_langchain only yields

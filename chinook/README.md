@@ -34,6 +34,32 @@ a single keyed read. `customer_key` is a deterministic hash of the first name,
 last name and phone — the same three fields the refund flow already asks for, so
 the agent computes it from the conversation rather than looking it up.
 
+### Memory that outlives the conversation
+
+`remember_interest` records two things the customer says: that they **want to
+buy** something, or simply that they **like** it. On a later conversation the
+agent is shown them again, each want reconciled against their actual orders:
+
+```
+From earlier conversations with this customer:
+- wanted to buy 'Coda' — still not purchased
+- wanted to buy 'Led Zeppelin I' — HAS SINCE BOUGHT IT
+- likes 'Physical Graffiti'
+```
+
+That reconciliation is the interesting part: the *intention* lives in agent
+memory, the *purchase* lives in the feature store, and neither knows about the
+other until this step joins them. A fulfilled want is reported as fulfilled
+rather than nagged about.
+
+These are keyed on `customer_key` — the same hash of name, surname and phone the
+purchases feature group uses — rather than on the conversation, which is what
+makes them survive a new chat. The agent already asks for those three fields, so
+the application supplies its own notion of identity instead of waiting for the
+platform. It is *identification, not authentication*: knowing someone's name and
+phone is enough to see their memories, exactly as it is already enough to see
+their order history. Fine for a demo; do not put anything sensitive behind it.
+
 ### The agent can see the customer's own orders
 
 `purchase_history` gives the question-answering agent read access to what the
