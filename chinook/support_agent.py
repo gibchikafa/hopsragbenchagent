@@ -68,7 +68,8 @@ log = logging.getLogger(__name__)
 
 CATALOG_FG = "chinook_catalog_embeddings"
 ARTIST_FG = "chinook_artist_catalog"
-PURCHASES_FG = "chinook_customer_purchases"
+CUSTOMERS_FG = "chinook_customers"
+PURCHASES_FG = "chinook_purchases"
 REFUNDS_FG = "chinook_refunds"
 FG_VERSION = 1
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
@@ -167,6 +168,31 @@ def _lookup_one(view_name: str, entry: dict) -> dict | None:
     if all(pd.isna(value) for value in record.values()):
         return None
     return record
+
+
+def _lookup_many(view_name: str, entries: list[dict]) -> list[dict]:
+    """One batched online read for many keys.
+
+    Purchase lines are one row each now, so a customer's history is N point
+    lookups. Batching them keeps that a single round trip.
+    """
+    if not entries:
+        return []
+    try:
+        view = _view(view_name)
+        frame = view.get_feature_vectors(entries, return_type="pandas")
+    except Exception:  # noqa: BLE001
+        log.exception("Batch lookup in %s failed for %d keys", view_name, len(entries))
+        return []
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    # a key that does not exist comes back as a row of nulls, same as the
+    # single-key read
+    return [
+        row.to_dict()
+        for _, row in frame.iterrows()
+        if not row.isnull().all()
+    ]
 
 
 def _catalog():
@@ -309,18 +335,25 @@ def _lookup(
 ) -> list[dict]:
     """A customer's purchases, filtered by the optional criteria.
 
-    One keyed read returns everything the customer bought; the filtering that
+    Two reads: the customer row for the ids of their lines, then one batched
+    read for the lines themselves. The online store cannot scan for "every line
+    belonging to this customer", so that id list is the index. Filtering that
     used to be SQL happens here, over tens of rows. Already-refunded lines are
     annotated rather than hidden — the ledger records refunds, it does not erase
     the sale.
     """
     key = customer_key(customer_first_name, customer_last_name, customer_phone)
-    row = _lookup_one(PURCHASES_FG, {"customer_key": key})
-    if not row:
+    customer = _lookup_one(CUSTOMERS_FG, {"customer_key": key})
+    if not customer:
         return []
-    lines = json.loads(row.get("purchases") or "[]")
-    for line in lines:
-        line["customer_key"] = key
+    try:
+        line_ids = json.loads(customer.get("line_ids") or "[]")
+    except (TypeError, ValueError):
+        log.exception("Malformed line_ids for customer %s", key)
+        return []
+    lines = _lookup_many(
+        PURCHASES_FG, [{"invoice_line_id": int(i)} for i in line_ids]
+    )
 
     if track_name:
         wanted = resolve_name(track_name, "track")

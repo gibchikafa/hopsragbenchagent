@@ -17,7 +17,8 @@ read.
 | Feature group | Key | Answers |
 |---|---|---|
 | `chinook_artist_catalog` | `artist_name` | "what albums/tracks does this artist have?" |
-| `chinook_customer_purchases` | `customer_key` | "what did this customer buy?" |
+| `chinook_customers` | `customer_key` | "who is this, and which lines are theirs?" |
+| `chinook_purchases` | `invoice_line_id` | one row per purchased line |
 | `chinook_refunds` | `invoice_line_id` | "has this line already been refunded?" |
 
 `customer_key` is a deterministic hash of the first name, last name and phone
@@ -63,7 +64,9 @@ CHINOOK_URL = "https://storage.googleapis.com/benchmarks-artifacts/chinook/Chino
 CHINOOK_DB = os.environ.get("CHINOOK_DB_PATH", "chinook.db")
 
 ARTIST_FG = "chinook_artist_catalog"
-PURCHASES_FG = "chinook_customer_purchases"
+CUSTOMERS_FG = "chinook_customers"
+PURCHASES_FG = "chinook_purchases"
+LEGACY_PURCHASES_FG = "chinook_customer_purchases"
 REFUNDS_FG = "chinook_refunds"
 FG_VERSION = 1
 
@@ -140,11 +143,19 @@ def build_artist_catalog(conn) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def build_customer_purchases(conn) -> pd.DataFrame:
-    """One row per customer, carrying every invoice line they bought as JSON."""
+def build_customers_and_purchases(conn) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Two frames: one row per customer, and one row per purchased line.
+
+    The online store does point lookups by primary key — it cannot scan for
+    "every line belonging to this customer". So the customer row carries the
+    list of their line ids, and that list is the index: read the customer, then
+    batch-read the lines. Small (a few hundred bytes at Chinook's ~38 lines per
+    customer) and, unlike the JSON blob this replaces, adding one purchase
+    rewrites one short list rather than the customer's entire history.
+    """
     rows = conn.execute(
         """
-        SELECT c.FirstName, c.LastName, c.Phone,
+        SELECT c.FirstName, c.LastName, c.Phone, c.Email,
                il.InvoiceLineId, il.InvoiceId, t.Name, art.Name, alb.Title,
                i.InvoiceDate, il.Quantity, il.UnitPrice
         FROM InvoiceLine il
@@ -156,51 +167,39 @@ def build_customer_purchases(conn) -> pd.DataFrame:
         """
     ).fetchall()
 
-    by_customer: dict[str, dict] = {}
-    for (
-        first,
-        last,
-        phone,
-        line_id,
-        invoice_id,
-        track,
-        artist,
-        album,
-        date,
-        qty,
-        price,
-    ) in rows:
+    customers: dict[str, dict] = {}
+    purchases: list[dict] = []
+    for (first, last, phone, email, line_id, invoice_id, track, artist, album,
+         date, qty, price) in rows:
         key = customer_key(first, last, phone)
-        entry = by_customer.setdefault(
+        entry = customers.setdefault(
             key,
-            {
-                "customer_key": key,
-                "first_name": first,
-                "last_name": last,
-                "phone": phone,
-                "_lines": [],
-            },
+            {"customer_key": key, "first_name": first, "last_name": last,
+             "phone": phone, "email": email, "_ids": []},
         )
-        entry["_lines"].append(
+        entry["_ids"].append(int(line_id))
+        purchases.append(
             {
-                "invoice_line_id": line_id,
-                "invoice_id": invoice_id,
+                "invoice_line_id": int(line_id),
+                "customer_key": key,
+                "invoice_id": int(invoice_id),
                 "track_name": track,
                 "artist_name": artist,
                 "album_title": album,
                 "purchase_date": date,
-                "quantity_purchased": qty,
-                "price_per_unit": price,
+                "quantity_purchased": int(qty),
+                "price_per_unit": float(price),
             }
         )
 
     records = []
-    for entry in by_customer.values():
-        lines = entry.pop("_lines")
-        entry["line_count"] = len(lines)
-        entry["purchases"] = json.dumps(lines)
+    for entry in customers.values():
+        ids = sorted(entry.pop("_ids"))
+        entry["line_count"] = len(ids)
+        entry["line_ids"] = json.dumps(ids)
         records.append(entry)
-    return pd.DataFrame(records)
+    return pd.DataFrame(records), pd.DataFrame(purchases)
+
 
 
 def _json_feature(name: str) -> Feature:
@@ -227,13 +226,15 @@ def main() -> None:
     conn = sqlite3.connect(db)
     try:
         artists = build_artist_catalog(conn)
-        purchases = build_customer_purchases(conn)
+        customers, purchases = build_customers_and_purchases(conn)
     finally:
         conn.close()
-    log.info("artists: %d rows | customers: %d rows", len(artists), len(purchases))
+    log.info("artists: %d | customers: %d | purchase lines: %d",
+             len(artists), len(customers), len(purchases))
 
     now = pd.Timestamp.utcnow().tz_localize(None)
     artists["migrated_at"] = now
+    customers["migrated_at"] = now
     purchases["migrated_at"] = now
 
     project = hopsworks.login()
@@ -259,10 +260,10 @@ def main() -> None:
     )
     artist_fg.insert(artists, write_options={"wait_for_job": True})
 
-    purchases_fg = fs.get_or_create_feature_group(
-        name=PURCHASES_FG,
+    customers_fg = fs.get_or_create_feature_group(
+        name=CUSTOMERS_FG,
         version=FG_VERSION,
-        description="Chinook invoice lines denormalised per customer (purchases as JSON)",
+        description="Chinook customers; line_ids indexes their purchase lines",
         primary_key=["customer_key"],
         event_time="migrated_at",
         online_enabled=True,
@@ -271,8 +272,33 @@ def main() -> None:
             Feature("first_name", type="string", online_type="varchar(100)"),
             Feature("last_name", type="string", online_type="varchar(100)"),
             Feature("phone", type="string", online_type="varchar(50)"),
+            Feature("email", type="string", online_type="varchar(200)"),
             Feature("line_count", type="bigint"),
-            _json_feature("purchases"),
+            # a few hundred bytes even for the busiest customer, so a plain
+            # varchar is fine here — unlike the blob this replaces
+            Feature("line_ids", type="string", online_type="varchar(2000)"),
+            Feature("migrated_at", type="timestamp"),
+        ],
+    )
+    customers_fg.insert(customers, write_options={"wait_for_job": True})
+
+    purchases_fg = fs.get_or_create_feature_group(
+        name=PURCHASES_FG,
+        version=FG_VERSION,
+        description="One row per purchased invoice line",
+        primary_key=["invoice_line_id"],
+        event_time="migrated_at",
+        online_enabled=True,
+        features=[
+            Feature("invoice_line_id", type="bigint"),
+            Feature("customer_key", type="string", online_type="varchar(64)"),
+            Feature("invoice_id", type="bigint"),
+            Feature("track_name", type="string", online_type="varchar(400)"),
+            Feature("artist_name", type="string", online_type="varchar(200)"),
+            Feature("album_title", type="string", online_type="varchar(400)"),
+            Feature("purchase_date", type="string", online_type="varchar(40)"),
+            Feature("quantity_purchased", type="bigint"),
+            Feature("price_per_unit", type="double"),
             Feature("migrated_at", type="timestamp"),
         ],
     )
@@ -306,6 +332,7 @@ def main() -> None:
     # Online point lookups go through a feature view, not the feature group.
     for name, fg in (
         (ARTIST_FG, artist_fg),
+        (CUSTOMERS_FG, customers_fg),
         (PURCHASES_FG, purchases_fg),
         (REFUNDS_FG, refunds_fg),
     ):
@@ -313,6 +340,17 @@ def main() -> None:
             name=name, version=FG_VERSION, query=fg.select_all()
         )
         log.info("feature view ready: %s v%d", name, FG_VERSION)
+
+    try:
+        legacy = fs.get_feature_group(LEGACY_PURCHASES_FG, version=FG_VERSION)
+    except Exception:  # noqa: BLE001
+        legacy = None
+    if legacy is not None:
+        log.warning(
+            "%s is superseded by %s + %s and is no longer read. Delete it when "
+            "you are happy with the new shape.",
+            LEGACY_PURCHASES_FG, CUSTOMERS_FG, PURCHASES_FG,
+        )
 
     log.info("Migration complete. The agent no longer needs chinook.db.")
 

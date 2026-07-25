@@ -25,12 +25,20 @@ intent_classifier ─┬─▶ refund_agent               (gather_info → looku
 |---|---|---|
 | `chinook_catalog_embeddings` | *(vector)* | "what is the canonical name for what the customer typed?" |
 | `chinook_artist_catalog` | `artist_name` | "what albums and tracks does this artist have?" |
-| `chinook_customer_purchases` | `customer_key` | "what did this customer buy?" |
+| `chinook_customers` | `customer_key` | "who is this, and which lines are theirs?" |
+| `chinook_purchases` | `invoice_line_id` | one row per purchased line |
 | `chinook_refunds` | `invoice_line_id` | "has this line already been refunded?" |
 
-The online store is a keyed lookup, not a query engine, so the migration
-denormalises around the two questions the agent actually asks and makes each one
-a single keyed read. `customer_key` is a deterministic hash of the first name,
+The online store is a keyed lookup, not a query engine, so the migration shapes
+the data around the questions the agent actually asks.
+
+Purchases are one row per invoice line. Because the online store cannot scan for
+"every line belonging to this customer", the customer row carries the ids of
+their lines and that list is the index: read the customer, then batch-read the
+lines with `get_feature_vectors`. Two round trips instead of one, in exchange
+for rows that are small and independently writable — adding a purchase rewrites
+one short id list rather than the customer's entire history, which is what the
+earlier single-JSON-blob shape required. `customer_key` is a deterministic hash of the first name,
 last name and phone — the same three fields the refund flow already asks for, so
 the agent computes it from the conversation rather than looking it up.
 
