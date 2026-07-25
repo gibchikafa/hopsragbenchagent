@@ -248,8 +248,11 @@ def main() -> None:
         online_enabled=True,
         features=[
             Feature("artist_name", type="string", online_type="varchar(200)"),
-            Feature("album_count", type="int"),
-            Feature("track_count", type="int"),
+            # bigint, not int: pandas defaults integer columns to int64, which
+            # hsfs derives as 'bigint'. Declaring 'int' (its name for int32)
+            # fails schema verification before anything is written.
+            Feature("album_count", type="bigint"),
+            Feature("track_count", type="bigint"),
             _json_feature("albums"),
             Feature("migrated_at", type="timestamp"),
         ],
@@ -268,7 +271,7 @@ def main() -> None:
             Feature("first_name", type="string", online_type="varchar(100)"),
             Feature("last_name", type="string", online_type="varchar(100)"),
             Feature("phone", type="string", online_type="varchar(50)"),
-            Feature("line_count", type="int"),
+            Feature("line_count", type="bigint"),
             _json_feature("purchases"),
             Feature("migrated_at", type="timestamp"),
         ],
