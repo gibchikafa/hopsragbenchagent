@@ -4,12 +4,24 @@ RAGBench LlamaIndex agent — native Hopsworks Agent Protocol implementation.
 Standalone (no import from ragbench_llamaindex_agent.py): the SDK owns the HTTP
 surface (manifest, /v1/chat, /v1/chat/stream, /health, CORS), tracing
 (LlamaIndex instrumentation activates automatically when tracing is enabled on
-the deployment), and conversation memory (PersistentAgentMemory on the project MySQL,
-keyed by the protocol's conversation_id). The agent code is only the domain:
-retrieval tool + LlamaIndex ReActAgent + one streaming handler.
+the deployment), and memory. The agent code is only the domain: retrieval tool +
+LlamaIndex ReActAgent + one streaming handler.
 
 ctx.stream_llamaindex pipes the agent's run through, yielding text deltas and
 turning tool calls into tool_event chips in the chat panel.
+
+Memory has three tiers, all served by one store:
+
+1. **Conversation buffer** — the turns of this conversation, keyed by the
+   protocol's conversation_id. Read with ``ctx.history``.
+2. **Rolling summary** — once a conversation outgrows the buffer, older turns
+   are folded into a summary instead of dropping out of view. This changes what
+   ``ctx.history`` means: it is the turns *since* the last fold, and everything
+   older is in ``ctx.summary``. Pass both to the model — ``ctx.system_context()``
+   assembles them.
+3. **Durable per-user memory** — facts the agent chooses to keep across
+   conversations, via the ``remember`` / ``recall`` / ``forget`` / ``search``
+   tools registered below.
 
 Deploy:
     hops agent create ragbench_llamaindex_agent_native.py --name ragbenchlinative \
@@ -21,7 +33,14 @@ Deploy:
 import logging
 
 import hopsworks
-from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, PersistentAgentMemory  # noqa: E501
+from hopsworks_agent_protocol import (  # noqa: E501
+    AgentApp,
+    AgentError,
+    AgentResponse,
+    PersistentAgentMemory,
+    anthropic_summarizer,
+    memory_tools,
+)
 from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.anthropic import Anthropic
@@ -35,13 +54,25 @@ FG_VERSION = 1
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 TOP_K = 6
 
+SYSTEM_PROMPT = """\
+You answer questions about AI/ML research by searching the RAGBench paper \
+corpus. Ground every factual claim in a passage you retrieved; say so when the \
+corpus does not cover something rather than answering from memory.
+
+You also keep notes about the person you are talking to. When they tell you \
+something that will still be true next time — the topics they work on, the \
+depth of explanation they want, a paper they are writing — store it with \
+`remember`. Do not store the content of papers there; that is what the corpus \
+is for.\
+"""
+
 
 # ── domain setup (module level, once) ────────────────────────────────────────
 
 project = hopsworks.login()
 fs = project.get_feature_store()
 embed = SentenceTransformer(EMBEDDING_MODEL)
-llm = Anthropic(model="claude-haiku-4-5-20251001", max_tokens=1024, temperature=0.0)
+llm = Anthropic(model="claude-haiku-4-5", max_tokens=1024, temperature=0.0)
 
 _fg = None
 _col_names: list[str] | None = None
@@ -81,7 +112,16 @@ def search_papers(query: str) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-tools = [FunctionTool.from_defaults(search_papers)]
+# The memory tools arrive as LlamaIndex FunctionTools; they resolve the store
+# and the current user from the request context, so their signatures carry no
+# plumbing. Registration is explicit — the SDK cannot reach into an arbitrary
+# framework's tool list, and appending to yours behind your back would be worse
+# than asking.
+#
+# Note the two searches are different things and the model is told so by their
+# docstrings: `search_papers` searches the corpus, `search` searches what *this
+# user* said in earlier conversations.
+tools = [FunctionTool.from_defaults(search_papers), *memory_tools("llamaindex")]
 
 
 # ── the protocol app: manifest + endpoints + tracing + memory ────────────────
@@ -98,7 +138,30 @@ agent_app = AgentApp(
         "How does retrieval-augmented generation work?",
     ],
     placeholder="Ask about AI/ML research...",
-    memory=PersistentAgentMemory(),
+    # Zero-config connection: project MySQL from the platform-injected MYSQL_*
+    # env vars, tables derived from DEPLOYMENT_ID.
+    memory=PersistentAgentMemory(
+        # Tier 2. Without a summarizer the buffer is a fixed newest-N window and
+        # older turns simply stop being visible; with one they are compacted
+        # into ctx.summary instead. Runs after the response has streamed, so it
+        # costs request duration every Nth turn and never time-to-answer.
+        summarize=anthropic_summarizer(),
+        # Tier 3. Creates the scoped-state table and enables remember/recall.
+        long_term=True,
+        # Semantic search over past conversations is off here: it needs an
+        # embedder plus a vector store, and the Hopsworks feature-group backend
+        # has not been verified against a live feature store yet. The `search`
+        # tool still works — it falls back to keyword matching over SQL — so
+        # switching this on later needs no prompt change:
+        #
+        #   from hopsworks_agent_protocol import vector_store_for
+        #   embedder = lambda text: embed.encode(
+        #       text, normalize_embeddings=True
+        #   ).tolist()
+        #   ... embedder=embedder, vector_store=vector_store_for(embedder)
+        #
+        # (the same SentenceTransformer loaded above is reusable for it)
+    ),
     tool_events=True,
     # ReActAgent is a LlamaIndex Workflow — the SDK derives its graph from the
     # @step methods (prebuilt agents show the framework's ReAct workflow;
@@ -118,18 +181,19 @@ async def stream(request, ctx):
             status_code=400,
         )
 
-    # The workflow ReActAgent does not reliably consume injected memory, so
-    # prepend the SDK-managed history into the prompt (proven approach).
-    history = ctx.history
-    if history:
-        lines = [f"{m['role'].capitalize()}: {m['content']}" for m in history]
-        prompt = (
-            "Conversation history:\n"
-            + "\n".join(lines)
-            + f"\n\nCurrent message: {request.text}"
+    # The workflow ReActAgent does not reliably consume injected memory, so the
+    # conversation goes into the prompt. ctx.system_context() carries the
+    # rolling summary of compacted turns plus what the agent has stored about
+    # this user, and returns "" when there is nothing yet; ctx.history is the
+    # turns since the last fold. Together they are the whole conversation.
+    sections = [SYSTEM_PROMPT + ctx.system_context()]
+    if ctx.history:
+        recent = "\n".join(
+            f"{m['role'].capitalize()}: {m['content']}" for m in ctx.history
         )
-    else:
-        prompt = request.text
+        sections.append(f"Recent turns:\n{recent}")
+    sections.append(f"Current message: {request.text}")
+    prompt = "\n\n".join(sections)
 
     _current_sources.clear()
     agent = ReActAgent(tools=tools, llm=llm)

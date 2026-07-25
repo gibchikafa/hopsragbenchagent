@@ -4,10 +4,22 @@ RAGBench LangChain agent — native Hopsworks Agent Protocol implementation.
 Fully standalone (no import from ragbench_langchain_agent.py): the SDK owns
 the HTTP surface (manifest, /v1/chat, /v1/chat/stream, /health, CORS),
 tracing (LangChain instrumentation activates automatically when tracing is
-enabled on the deployment), and conversation memory (PersistentAgentMemory on the
-project MySQL, keyed by the protocol's conversation_id). The agent code is
-only the domain: retrieval tool + LangGraph ReAct agent + one streaming
-handler that yields tokens as they are generated.
+enabled on the deployment), and memory. The agent code is only the domain:
+retrieval tool + LangGraph ReAct agent + one streaming handler that yields
+tokens as they are generated.
+
+Memory has three tiers, all served by one store:
+
+1. **Conversation buffer** — the turns of this conversation, keyed by the
+   protocol's conversation_id. Read with ``ctx.history``.
+2. **Rolling summary** — once a conversation outgrows the buffer, older turns
+   are folded into a summary instead of dropping out of view. This changes what
+   ``ctx.history`` means: it is the turns *since* the last fold, and everything
+   older is in ``ctx.summary``. Pass both to the model — ``ctx.system_context()``
+   assembles them.
+3. **Durable per-user memory** — facts the agent chooses to keep across
+   conversations, via the ``remember`` / ``recall`` / ``forget`` / ``search``
+   tools registered below.
 
 Deploy:
     hops agent create ragbench_langchain_agent_native.py --name ragbenchnative \
@@ -19,9 +31,15 @@ Deploy:
 import logging
 
 import hopsworks
-from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse, PersistentAgentMemory  # noqa: E501
+from hopsworks_agent_protocol import (  # noqa: E501
+    AgentApp,
+    AgentError,
+    AgentResponse,
+    PersistentAgentMemory,
+    anthropic_summarizer,
+    memory_tools,
+)
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from sentence_transformers import SentenceTransformer
@@ -33,6 +51,18 @@ FG_NAME = "ragbench_embeddings"
 FG_VERSION = 1
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 TOP_K = 6
+
+SYSTEM_PROMPT = """\
+You answer questions about AI/ML research by searching the RAGBench paper \
+corpus. Ground every factual claim in a passage you retrieved; say so when the \
+corpus does not cover something rather than answering from memory.
+
+You also keep notes about the person you are talking to. When they tell you \
+something that will still be true next time — the topics they work on, the \
+depth of explanation they want, a paper they are writing — store it with \
+`remember`. Do not store the content of papers there; that is what the corpus \
+is for.\
+"""
 
 
 # ── domain setup (module level, once) ────────────────────────────────────────
@@ -81,8 +111,20 @@ def search_papers(query: str) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-llm = ChatAnthropic(model="claude-haiku-4-5-20251001", max_tokens=1024, temperature=0.0)
-agent = create_react_agent(llm, [search_papers])
+llm = ChatAnthropic(model="claude-haiku-4-5", max_tokens=1024, temperature=0.0)
+
+# The memory tools are ordinary LangChain tools; they resolve the store and the
+# current user from the request context, so their signatures carry no plumbing.
+# Registration is explicit — the SDK cannot reach into an arbitrary framework's
+# tool list, and appending to yours behind your back would be worse than asking.
+#
+# Note the two searches are different things and the model is told so by their
+# docstrings: `search_papers` searches the corpus, `search` searches what *this
+# user* said in earlier conversations.
+# No prompt= here: the system message is assembled per request in the handler,
+# because it carries the rolling summary and this user's stored facts, which a
+# construction-time prompt cannot know.
+agent = create_react_agent(llm, [search_papers, *memory_tools("langgraph")])
 
 
 # ── the protocol app: manifest + endpoints + tracing + memory ────────────────
@@ -99,9 +141,30 @@ agent_app = AgentApp(
         "How does retrieval-augmented generation work?",
     ],
     placeholder="Ask about AI/ML research...",
-    # zero-config: project MySQL from the platform-injected MYSQL_* env
-    # vars, table name derived from DEPLOYMENT_ID
-    memory=PersistentAgentMemory(),
+    # Zero-config connection: project MySQL from the platform-injected MYSQL_*
+    # env vars, tables derived from DEPLOYMENT_ID.
+    memory=PersistentAgentMemory(
+        # Tier 2. Without a summarizer the buffer is a fixed newest-N window and
+        # older turns simply stop being visible; with one they are compacted
+        # into ctx.summary instead. Runs after the response has streamed, so it
+        # costs request duration every Nth turn and never time-to-answer.
+        summarize=anthropic_summarizer(),
+        # Tier 3. Creates the scoped-state table and enables remember/recall.
+        long_term=True,
+        # Semantic search over past conversations is off here: it needs an
+        # embedder plus a vector store, and the Hopsworks feature-group backend
+        # has not been verified against a live feature store yet. The `search`
+        # tool still works — it falls back to keyword matching over SQL — so
+        # switching this on later needs no prompt change:
+        #
+        #   from hopsworks_agent_protocol import vector_store_for
+        #   embedder = lambda text: embed.encode(
+        #       text, normalize_embeddings=True
+        #   ).tolist()
+        #   ... embedder=embedder, vector_store=vector_store_for(embedder)
+        #
+        # (the same SentenceTransformer loaded above is reusable for it)
+    ),
     # surface tool calls as progress chips in the chat panel
     tool_events=True,
     # show the agent's structure in the panel's Graph tab
@@ -123,14 +186,20 @@ async def stream(request, ctx):
             status_code=400,
         )
 
-    history = ctx.history  # SDK-managed conversation memory
     _current_sources.clear()
 
+    # ctx.system_context() carries the rolling summary of compacted turns plus
+    # what the agent has stored about this user. It returns "" when there is
+    # nothing yet, so it is safe to concatenate unconditionally. The SDK builds
+    # it every turn but never places it — where context belongs is a property of
+    # your prompt, so that call is yours to make.
+    messages = [{"role": "system", "content": SYSTEM_PROMPT + ctx.system_context()}]
+    # Turns since the last fold; anything older is in the summary above.
+    messages += ctx.history
+    messages.append({"role": "user", "content": request.text})
+
     async for delta in ctx.stream_langchain(
-        agent.astream_events(
-            {"messages": history + [HumanMessage(content=request.text)]},
-            version="v2",
-        )
+        agent.astream_events({"messages": messages}, version="v2")
     ):
         yield delta
 
