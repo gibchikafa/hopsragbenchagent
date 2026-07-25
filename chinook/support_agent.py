@@ -124,7 +124,14 @@ def _lookup_one(view_name: str, entry: dict) -> dict | None:
         return None
     if row is None or getattr(row, "empty", False):
         return None
-    return row.iloc[0].to_dict()
+    record = row.iloc[0].to_dict()
+    # A key that does not exist neither raises nor returns an empty frame: it
+    # returns one row of nulls. Without this check the caller gets a truthy
+    # dict of NaNs — which would make _refunded_line_ids treat every line as
+    # already refunded, so every refund would quietly come to $0.00.
+    if all(pd.isna(value) for value in record.values()):
+        return None
+    return record
 
 
 def _catalog():
