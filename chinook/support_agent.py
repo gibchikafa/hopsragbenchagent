@@ -792,10 +792,41 @@ async def stream(request, ctx):
     known = ctx.state(IDENTITY_SCOPE)
     identity = {key: known[key] for key in IDENTITY_KEYS if known.get(key)}
 
+    # Not every reply comes from a model. `identify` asks for details, `lookup`
+    # renders the purchase table and `refund` confirms the amount — all written
+    # straight into graph state by a node. ctx.stream_langchain only yields
+    # model token deltas, so those turns stream nothing at all and the client
+    # shows an empty response. Tap the event stream on its way through to keep
+    # the graph's final state, and fall back to its `followup` when the turn
+    # produced no tokens.
+    final_state: dict = {}
+
+    async def _capture(events):
+        async for event in events:
+            if event.get("event") == "on_chain_end":
+                output = (event.get("data") or {}).get("output")
+                if isinstance(output, dict) and "followup" in output:
+                    final_state.update(output)
+            yield event
+
+    streamed = False
     async for delta in ctx.stream_langchain(
-        graph.astream_events({"messages": messages, **identity}, version="v2")
+        _capture(graph.astream_events({"messages": messages, **identity}, version="v2"))
     ):
+        streamed = True
         yield delta
+
+    if not streamed:
+        followup = final_state.get("followup")
+        if followup:
+            yield str(followup)
+        else:
+            # a turn that neither streamed nor set a followup would otherwise
+            # look like the agent ignored the customer
+            yield (
+                "Sorry — I wasn't able to put together a reply just then. "
+                "Could you try rephrasing?"
+            )
 
 
 if __name__ == "__main__":
