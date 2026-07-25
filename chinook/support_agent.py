@@ -370,15 +370,14 @@ class PurchaseInformation(TypedDict):
 info_llm = ChatAnthropic(
     model=ROUTER_MODEL, max_tokens=1024, temperature=0.0
 ).with_structured_output(
-    PurchaseInformation, include_raw=True
+    PurchaseInformation
 )
 
 
 async def gather_info(state: State) -> Command[Literal["lookup", "refund", "__end__"]]:
-    info = await info_llm.ainvoke(
+    parsed = await info_llm.ainvoke(
         [{"role": "system", "content": GATHER_INFO_INSTRUCTIONS}, *state["messages"]]
-    )
-    parsed = info["parsed"] or {}
+    ) or {}
     if any(parsed.get(k) for k in ("invoice_id", "invoice_line_ids")):
         goto = "refund"
     elif all(
@@ -388,7 +387,16 @@ async def gather_info(state: State) -> Command[Literal["lookup", "refund", "__en
         goto = "lookup"
     else:
         goto = END
-    return Command(update={"messages": [info["raw"]], **parsed}, goto=goto)
+    # NB: do not put info["raw"] into `messages`. ChatAnthropic implements
+    # with_structured_output via tool calling, so the raw reply is an assistant
+    # message carrying a `tool_use` block. Appending it leaves a tool_use with
+    # no matching tool_result, and the next model call is rejected:
+    #   messages.N: `tool_use` ids were found without `tool_result` blocks
+    # The extracted fields go into state, which is the part that matters; the
+    # tool call itself is not conversation content. (The notebook this came
+    # from used OpenAI with method="json_schema", which returns plain content
+    # and so had nothing to trip over.)
+    return Command(update=dict(parsed), goto=goto)
 
 
 def refund(state: State) -> dict:
@@ -587,12 +595,41 @@ class CustomerIdentity(TypedDict):
 
 identity_llm = ChatAnthropic(
     model=ROUTER_MODEL, max_tokens=512, temperature=0.0
-).with_structured_output(CustomerIdentity, include_raw=True)
+).with_structured_output(CustomerIdentity)
 
 ASK_FOR_IDENTITY = (
     "Before we start — could you give me your first name, last name, and the "
     "phone number on your account? I'll keep them for the rest of this chat."
 )
+
+
+_MISSING_MARKERS = {"", "none", "null", "n/a", "na", "unknown", "not provided",
+                    "not specified", "string"}
+
+
+def _clean_identity(parsed: dict) -> dict:
+    """Drop values the model filled in rather than read.
+
+    Structured output makes every key of the schema required, so the model
+    cannot simply omit a field it was not told — it produces *something*,
+    usually a placeholder and occasionally an invention. Telling it not to
+    guess helps but does not bind it. So placeholders are treated as missing,
+    and a phone number has to contain enough digits to be one; otherwise a
+    turn like "hello" sails past the identity gate on fabricated details and
+    the refund flow goes looking up a customer who does not exist.
+    """
+    cleaned = {}
+    for key in IDENTITY_KEYS:
+        value = parsed.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text.lower() in _MISSING_MARKERS:
+            continue
+        if key == "customer_phone" and sum(c.isdigit() for c in text) < 7:
+            continue
+        cleaned[key] = text
+    return cleaned
 
 
 async def identify(state: State) -> Command[Literal["intent_classifier", "__end__"]]:
@@ -610,17 +647,27 @@ async def identify(state: State) -> Command[Literal["intent_classifier", "__end_
     if all(state.get(key) for key in IDENTITY_KEYS):
         return Command(goto="intent_classifier")
 
-    info = await identity_llm.ainvoke(
-        [{"role": "system", "content": IDENTIFY_INSTRUCTIONS}, *state["messages"]]
+    parsed = _clean_identity(
+        await identity_llm.ainvoke(
+            [{"role": "system", "content": IDENTIFY_INSTRUCTIONS}, *state["messages"]]
+        )
+        or {}
     )
-    parsed = info["parsed"] or {}
     if all(parsed.get(key) for key in IDENTITY_KEYS):
         for key in IDENTITY_KEYS:
             # `user` scope: durable across every future conversation for this
             # subject, and auto-injected via ctx.system_context()
             remember(key, str(parsed[key]), scope=IDENTITY_SCOPE)
-        return Command(update={"messages": [info["raw"]], **parsed},
-                       goto="intent_classifier")
+        # NB: do not put info["raw"] into `messages`. ChatAnthropic implements
+        # with_structured_output via tool calling, so the raw reply is an assistant
+        # message carrying a `tool_use` block. Appending it leaves a tool_use with
+        # no matching tool_result, and the next model call is rejected:
+        #   messages.N: `tool_use` ids were found without `tool_result` blocks
+        # The extracted fields go into state, which is the part that matters; the
+        # tool call itself is not conversation content. (The notebook this came
+        # from used OpenAI with method="json_schema", which returns plain content
+        # and so had nothing to trip over.)
+        return Command(update=dict(parsed), goto="intent_classifier")
 
     return Command(
         update={
