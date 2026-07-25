@@ -34,6 +34,19 @@ a single keyed read. `customer_key` is a deterministic hash of the first name,
 last name and phone — the same three fields the refund flow already asks for, so
 the agent computes it from the conversation rather than looking it up.
 
+### The agent can see the customer's own orders
+
+`purchase_history` gives the question-answering agent read access to what the
+signed-in customer has already bought, grouped by album, with the tracks, dates
+and how many lines have since been refunded. Without it the agent could describe
+the whole catalogue but not answer "what have I bought before" — purchase lookup
+lived only inside the refund sub-graph and was unreachable from a general
+question.
+
+A LangChain tool is called by the model and gets no graph state, so the handler
+publishes the turn's customer into a `ContextVar` that the tool reads — a
+ContextVar rather than a global because two turns can be in flight at once.
+
 ### Identity is asked once per conversation
 
 The graph will not route to refunds or catalogue questions until it knows the

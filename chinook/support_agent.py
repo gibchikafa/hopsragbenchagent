@@ -35,6 +35,7 @@ Deploy:
     hops agent start chinooksupport --wait 600
 """
 
+import contextvars
 import hashlib
 import json
 import logging
@@ -79,6 +80,28 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 # needs more headroom.
 ROUTER_MODEL = os.environ.get("CHINOOK_ROUTER_MODEL", "claude-haiku-4-5")
 ANSWER_MODEL = os.environ.get("CHINOOK_ANSWER_MODEL", "claude-haiku-4-5")
+
+IDENTITY_KEYS = ("customer_first_name", "customer_last_name", "customer_phone")
+
+# Identity is stored per conversation, not per person, because nothing here can
+# tell us who the person is: the chat transport authenticates a project-wide
+# serving key, so `subject` is whatever the client claims and defaults to the
+# conversation id. Writing to `session` scope says that plainly instead of
+# leaning on that fallback and pretending it is per-user.
+#
+# When real end-user identity arrives — the deployment-scoped chat token the
+# panel design calls for — flipping this to "user" is the whole change needed
+# to make the ask happen once per customer rather than once per conversation.
+IDENTITY_SCOPE = "session"
+
+# The identity of the customer in the turn being handled. A LangChain tool is
+# invoked by the model and gets no graph state, so the handler puts it here and
+# the purchase-history tool reads it back. A ContextVar rather than a plain
+# global because two turns can be in flight at once and must not see each
+# other's customer.
+_current_identity: contextvars.ContextVar[dict] = contextvars.ContextVar(
+    "chinook_identity", default={}
+)
 
 
 # ── data access ──────────────────────────────────────────────────────────────
@@ -551,6 +574,64 @@ def lookup_artist(
     return [canonical] if artist_catalog(canonical) is not None else []
 
 
+@tool
+def purchase_history(
+    artist_name: str | None = None, album_title: str | None = None
+) -> list[dict] | str:
+    """What this customer has already bought from the store, grouped by album.
+
+    Call this whenever the customer asks about their own orders, their history,
+    what they own, or whether they already bought something — "what albums have
+    I purchased", "have I bought this before", "what did I order in March".
+    Optionally narrow to one artist or album. Do not use it for questions about
+    the catalogue in general; that is what the lookup tools are for.
+
+    Returns one entry per album with the tracks bought from it, the dates, and
+    how many of those lines have since been refunded.
+    """
+    identity = _current_identity.get()
+    missing = [key for key in IDENTITY_KEYS if not identity.get(key)]
+    if missing:
+        return (
+            "I don't know who I'm speaking to yet, so I can't look up an order "
+            "history. Ask the customer for their first name, last name and the "
+            "phone number on their account."
+        )
+
+    lines = _lookup(
+        identity["customer_first_name"],
+        identity["customer_last_name"],
+        identity["customer_phone"],
+        None,
+        album_title,
+        artist_name,
+        None,
+    )
+    if not lines:
+        return []
+
+    albums: dict[tuple, dict] = {}
+    for line in lines:
+        key = (line["album_title"], line["artist_name"])
+        entry = albums.setdefault(
+            key,
+            {
+                "album_title": line["album_title"],
+                "artist_name": line["artist_name"],
+                "tracks_purchased": [],
+                "purchase_dates": [],
+                "refunded_tracks": 0,
+            },
+        )
+        entry["tracks_purchased"].append(line["track_name"])
+        day = (line["purchase_date"] or "")[:10]
+        if day and day not in entry["purchase_dates"]:
+            entry["purchase_dates"].append(day)
+        if line.get("refunded"):
+            entry["refunded_tracks"] += 1
+    return list(albums.values())
+
+
 qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
 # The memory tools go in the same list: a support agent that remembers a
 # returning customer's name and phone number is the whole point of durable
@@ -558,25 +639,18 @@ qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
 # reach into a framework's tool list on your behalf.
 qa_graph = create_react_agent(
     qa_llm,
-    [lookup_track, lookup_artist, lookup_album, *memory_tools("langgraph")],
+    [
+        lookup_track,
+        lookup_artist,
+        lookup_album,
+        purchase_history,
+        *memory_tools("langgraph"),
+    ],
 )
 
 
 # ── supervisor ───────────────────────────────────────────────────────────────
 
-
-IDENTITY_KEYS = ("customer_first_name", "customer_last_name", "customer_phone")
-
-# Identity is stored per conversation, not per person, because nothing here can
-# tell us who the person is: the chat transport authenticates a project-wide
-# serving key, so `subject` is whatever the client claims and defaults to the
-# conversation id. Writing to `session` scope says that plainly instead of
-# leaning on that fallback and pretending it is per-user.
-#
-# When real end-user identity arrives — the deployment-scoped chat token the
-# panel design calls for — flipping this to "user" is the whole change needed
-# to make the ask happen once per customer rather than once per conversation.
-IDENTITY_SCOPE = "session"
 
 IDENTIFY_INSTRUCTIONS = """You are the front desk of an online music store. Your only \
 job right now is to work out who you are speaking to. From the conversation so far, \
@@ -791,6 +865,8 @@ async def stream(request, ctx):
     # customer arrives already identified and `identify` falls straight through.
     known = ctx.state(IDENTITY_SCOPE)
     identity = {key: known[key] for key in IDENTITY_KEYS if known.get(key)}
+    # published for purchase_history, which the model calls without graph state
+    _current_identity.set(identity)
 
     # Not every reply comes from a model. `identify` asks for details, `lookup`
     # renders the purchase table and `refund` confirms the amount — all written
