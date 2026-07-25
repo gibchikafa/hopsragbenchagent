@@ -1,7 +1,7 @@
 """
 RAGBench LangChain agent — native Hopsworks Agent Protocol implementation.
 
-Fully standalone (no import from ragbench_langchain_agent.py): the SDK owns
+Fully standalone (no import from langchain_agent.py): the SDK owns
 the HTTP surface (manifest, /v1/chat, /v1/chat/stream, /health, CORS),
 tracing (LangChain instrumentation activates automatically when tracing is
 enabled on the deployment), and memory. The agent code is only the domain:
@@ -22,8 +22,8 @@ Memory has three tiers, all served by one store:
    tools registered below.
 
 Deploy:
-    hops agent create ragbench_langchain_agent_native.py --name ragbenchnative \
-        --requirements ragbench_langchain_hap_requirements.txt \
+    hops agent create langchain_agent_native.py --name ragbenchnative \
+        --requirements langchain_hap_requirements.txt \
         --environment python-agent-pipeline-meb10000-v1
     hops agent start ragbenchnative --wait 600
 """

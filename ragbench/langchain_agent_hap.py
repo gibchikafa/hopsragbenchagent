@@ -1,7 +1,7 @@
 """
 RAGBench LangChain agent — Hopsworks Agent Protocol edition.
 
-Same agent as ragbench_langchain_agent.py (LangGraph ReAct agent, MySQL-backed
+Same agent as langchain_agent.py (LangGraph ReAct agent, MySQL-backed
 conversation memory, RAG over the ragbench_embeddings feature group), but
 served through the Hopsworks Agent Protocol so the Hopsworks UI chat panel
 detects and talks to it with zero configuration:
@@ -11,14 +11,14 @@ detects and talks to it with zero configuration:
     POST /v1/chat/stream                     SSE (degrades to one completed event)
     GET  /health                             liveness
 
-The heavy lifting is reused verbatim: importing ragbench_langchain_agent
+The heavy lifting is reused verbatim: importing langchain_agent
 builds the predictor (Hopsworks login, MySQL chat store, embedding model,
 LangGraph agent) exactly once. The protocol's conversation_id doubles as the
 chat store session_id, and retrieved papers are returned as citations.
 
 Deploy:
-    hops agent create ragbench_langchain_agent_hap.py --name ragbenchhapagent \
-        --requirements ragbench_langchain_hap_requirements.txt \
+    hops agent create langchain_agent_hap.py --name ragbenchhapagent \
+        --requirements langchain_hap_requirements.txt \
         --environment python-agent-pipeline-meb10000-v1
     hops agent start ragbenchhapagent --wait 600
 """
@@ -29,7 +29,7 @@ from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse
 
 # Reuses the existing predictor: constructing it connects to Hopsworks, the
 # MySQL chat store, and loads the embedding model (module-level, once).
-from ragbench_langchain_agent import predictor
+from langchain_agent import predictor
 
 agent_app = AgentApp(
     name="RAGBench agent",

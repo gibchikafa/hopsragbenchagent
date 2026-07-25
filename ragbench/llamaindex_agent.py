@@ -1,27 +1,24 @@
 """
-RAGBench LangChain + LangGraph agent — FastAPI + uvicorn, following the Hopsworks agent pattern.
-Uses langgraph.prebuilt.create_react_agent with MySQL-backed conversation memory.
-
-Conversation history is stored in MySQL (table: ragbench_chat_history).
+RAGBench LlamaIndex agent — FastAPI + uvicorn, following the Hopsworks agent pattern.
+Conversation history is persisted in MySQL (table: ragbench_li_chat_history).
 Each independent conversation is identified by a session_id sent in the request.
 
 Deploy:
-    hops agent create ragbench_langchain_agent.py --name ragbenchlcagent \
-        --requirements ragbench_langchain_requirements.txt \
-        --environment python-agent-pipeline-meb10000-v1
-    hops agent start ragbenchlcagent --wait 600
+    hops agent create llamaindex_agent.py --name ragbenchagent \
+        --requirements llamaindex_requirements.txt --environment ragbench-agent
+    hops agent start ragbenchagent --wait 600
 
 Query (single-turn):
-    hops agent query ragbenchlcagent --data '{"prompt": "What is chain-of-thought prompting?"}'
+    hops agent query ragbenchagent --data '{"prompt": "What is chain-of-thought prompting?"}'
 
 Query (multi-turn — same session_id continues the conversation):
-    curl -s -X POST http://10.114.123.120/v1/g2/ragbenchlcagent/query \
+    curl -s -X POST http://10.114.123.120/v1/g2/ragbenchagent/query \
       -H "Authorization: ApiKey appapikey" \
       -H "Content-Type: application/json" \
-      -d '{"prompt": "What is it?", "session_id": "user-abc-session-1"}'
+      -d '{"prompt": "Can you give an example?", "session_id": "<id from previous response>"}'
 
     Response:
-    {"answer": "...", "sources": [...], "session_id": "user-abc-session-1"}
+    {"answer": "...", "sources": [...], "session_id": "..."}
 """
 
 import logging
@@ -31,16 +28,18 @@ import uuid
 import hopsworks
 import uvicorn
 from fastapi import FastAPI
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from langchain_core.tools import tool
-from langgraph.prebuilt import create_react_agent
-from openinference.instrumentation.langchain import LangChainInstrumentor
+from llama_index.core.agent.workflow import ReActAgent
+from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.tools import FunctionTool
+from llama_index.llms.anthropic import Anthropic
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk import trace as trace_sdk
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import Column, Index, Integer, MetaData, String, Table, Text, create_engine
+from sqlalchemy.orm import Session
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -52,18 +51,16 @@ TOP_K = 6
 MAX_HISTORY_MESSAGES = 50  # last 50 messages = 25 conversation turns
 
 
-def _build_tracer_provider():
-    # The platform injects this env var (and runs the OTLP sidecar) only when
-    # tracing is enabled on the deployment. Without it there is nothing
-    # listening on localhost:4318 — exporting would just spam connection
-    # errors on every request.
-    endpoint = os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-    if endpoint is None:
-        log.info("Tracing disabled (no OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)")
-        return None
-    tp = trace_sdk.TracerProvider()
-    tp.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
-    return tp
+def build_tracer_provider():
+    endpoint = os.environ.get(
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+        "http://localhost:4318/v1/traces",
+    )
+    tracer_provider = trace_sdk.TracerProvider()
+    tracer_provider.add_span_processor(
+        SimpleSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
+    )
+    return tracer_provider
 
 
 # ── MySQL chat store ──────────────────────────────────────────────────────────
@@ -72,9 +69,9 @@ class MySQLChatStore:
     def __init__(self, url: str, table_name: str, max_messages: int = MAX_HISTORY_MESSAGES):
         self._engine = create_engine(url, pool_pre_ping=True)
         self._max = max_messages
-        # In-memory cache: session_id → list[BaseMessage] (avoids a DB round-trip
+        # In-memory cache: session_id → list[ChatMessage] (avoids a DB round-trip
         # on every message for the lifetime of this pod).
-        self._cache: dict[str, list[BaseMessage]] = {}
+        self._cache: dict[str, list[ChatMessage]] = {}
         metadata = MetaData()
         self._table = Table(
             table_name, metadata,
@@ -87,7 +84,7 @@ class MySQLChatStore:
         metadata.create_all(self._engine)
         log.info("Chat history table: %s", table_name)
 
-    def get_messages(self, session_id: str) -> list[BaseMessage]:
+    def get_messages(self, session_id: str) -> list[ChatMessage]:
         if session_id in self._cache:
             return self._cache[session_id]
         with self._engine.connect() as conn:
@@ -97,8 +94,11 @@ class MySQLChatStore:
                 .order_by(self._table.c.id.desc())
                 .limit(self._max)
             ).fetchall()
-        messages: list[BaseMessage] = [
-            HumanMessage(content=r.content) if r.role == "user" else AIMessage(content=r.content)
+        messages = [
+            ChatMessage(
+                role=MessageRole.USER if r.role == "user" else MessageRole.ASSISTANT,
+                content=r.content,
+            )
             for r in reversed(rows)  # restore chronological order
         ]
         self._cache[session_id] = messages
@@ -109,7 +109,10 @@ class MySQLChatStore:
             conn.execute(self._table.insert().values(
                 session_id=session_id, role=role, content=content
             ))
-        msg: BaseMessage = HumanMessage(content=content) if role == "user" else AIMessage(content=content)
+        msg = ChatMessage(
+            role=MessageRole.USER if role == "user" else MessageRole.ASSISTANT,
+            content=content,
+        )
         session_cache = self._cache.setdefault(session_id, [])
         session_cache.append(msg)
         if len(session_cache) > self._max:
@@ -118,15 +121,17 @@ class MySQLChatStore:
 
 # ── Predictor ─────────────────────────────────────────────────────────────────
 
-class RagbenchLCPredictor:
+class RagbenchPredictor:
     def __init__(self):
-        self._tracer_provider = _build_tracer_provider()
-        if self._tracer_provider is not None:
-            LangChainInstrumentor().instrument(tracer_provider=self._tracer_provider)
+        self.tracer_provider = build_tracer_provider()
+        LlamaIndexInstrumentor().instrument(tracer_provider=self.tracer_provider)
 
         # ── feature store ────────────────────────────────────────────────────
         project = hopsworks.login()
         self._fs = project.get_feature_store()
+        self._fg = None
+        self._col_names = None
+        log.info("Hopsworks connected. Feature group will be loaded on first query.")
 
         # ── MySQL chat store (env vars + Hopsworks secret) ───────────────────
         secret_name = os.environ["MYSQL_PASSWORD_SECRET_NAME"]
@@ -137,26 +142,26 @@ class RagbenchLCPredictor:
         db = os.environ["MYSQL_DB"]
         mysql_url = f"mysql+pymysql://{user}:{password}@{host}:{port}/{db}"
         deployment_id = os.environ.get("DEPLOYMENT_ID", "local")
-        table_name = f"ragbench_chat_history_{deployment_id}"
+        table_name = f"ragbench_li_chat_history_{deployment_id}"
         self._chat_store = MySQLChatStore(mysql_url, table_name=table_name)
         log.info("MySQL chat store ready: %s@%s:%s/%s", user, host, port, db)
-
-        self._fg = None
-        self._col_names = None
-        log.info("Hopsworks connected. Feature group will be loaded on first query.")
 
         # ── embedding model ──────────────────────────────────────────────────
         self._embed = SentenceTransformer(EMBEDDING_MODEL)
 
-        # ── sources accumulated across all tool calls within one query ───────
-        self._current_sources: list[dict] = []
+        # ── LLM ─────────────────────────────────────────────────────────────
+        self._llm = Anthropic(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            temperature=0.0,
+        )
 
         # ── RAG tool ─────────────────────────────────────────────────────────
-        @tool
+        self._current_sources: list[dict] = []
+
         def search_papers(query: str) -> str:
             """Search the RAGBench academic paper corpus for passages relevant to the query.
-            Returns the top matching excerpts with paper titles and similarity scores.
-            Use this whenever you need factual information about AI/ML research topics."""
+            Returns the top matching excerpts with paper titles and similarity scores."""
             if self._fg is None:
                 self._fg = self._fs.get_feature_group(FG_NAME, version=FG_VERSION)
                 if self._fg is None:
@@ -181,17 +186,9 @@ class RagbenchLCPredictor:
                     existing["score"] = round(score, 4)
             return "\n\n---\n\n".join(parts)
 
-        # ── LLM ─────────────────────────────────────────────────────────────
-        llm = ChatAnthropic(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            temperature=0.0,
-        )
+        self._tools = [FunctionTool.from_defaults(search_papers)]
 
-        # ── ReAct agent (LangGraph, stateless — memory injected per request) ─
-        self.agent = create_react_agent(llm, [search_papers])
-
-    def predict(self, inputs: dict) -> dict:
+    async def _predict_async(self, inputs: dict) -> dict:
         prompt = inputs.get("prompt", inputs.get("question", "")).strip()
         session_id = inputs.get("session_id") or str(uuid.uuid4())
         if not prompt:
@@ -200,11 +197,23 @@ class RagbenchLCPredictor:
         past_messages = self._chat_store.get_messages(session_id)
         log.info("SESSION %s: %d prior messages, QUERY: %s", session_id, len(past_messages), prompt)
 
-        self._current_sources = []
-        all_messages = past_messages + [HumanMessage(content=prompt)]
-        result = self.agent.invoke({"messages": all_messages})
-        answer = result["messages"][-1].content
+        # The workflow-based ReActAgent does not reliably use an injected
+        # ChatMemoryBuffer as LLM context, so we prepend history into the prompt.
+        if past_messages:
+            history_lines = [
+                f"{'User' if msg.role == MessageRole.USER else 'Assistant'}: {msg.content}"
+                for msg in past_messages
+            ]
+            full_prompt = "Conversation history:\n" + "\n".join(history_lines) + f"\n\nCurrent message: {prompt}"
+        else:
+            full_prompt = prompt
 
+        self._current_sources = []
+        agent = ReActAgent(tools=self._tools, llm=self._llm)
+        result = await agent.run(full_prompt)
+        answer = str(result)
+
+        # Persist the new turn.
         self._chat_store.add_message(session_id, "user", prompt)
         self._chat_store.add_message(session_id, "assistant", answer)
 
@@ -213,14 +222,20 @@ class RagbenchLCPredictor:
         return {"answer": answer, "sources": sources, "session_id": session_id}
 
 
-predictor = RagbenchLCPredictor()
+predictor = RagbenchPredictor()
 
 agent_app = FastAPI()
 
+FastAPIInstrumentor.instrument_app(
+    agent_app,
+    tracer_provider=predictor.tracer_provider,
+    excluded_urls=r"^(?!.*\/query$).*",
+)
+
 
 @agent_app.post("/query")
-def query(payload: dict):
-    return predictor.predict(payload)
+async def query(payload: dict):
+    return await predictor._predict_async(payload)
 
 
 if __name__ == "__main__":

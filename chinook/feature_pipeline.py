@@ -15,7 +15,7 @@ changes, not when a pod happens to boot.
 
 Run once before starting the agent:
 
-    python chinook_feature_pipeline.py
+    python feature_pipeline.py
 """
 
 import logging

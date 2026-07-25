@@ -1,7 +1,7 @@
 """
 RAGBench LlamaIndex agent — native Hopsworks Agent Protocol implementation.
 
-Standalone (no import from ragbench_llamaindex_agent.py): the SDK owns the HTTP
+Standalone (no import from llamaindex_agent.py): the SDK owns the HTTP
 surface (manifest, /v1/chat, /v1/chat/stream, /health, CORS), tracing
 (LlamaIndex instrumentation activates automatically when tracing is enabled on
 the deployment), and memory. The agent code is only the domain: retrieval tool +
@@ -24,8 +24,8 @@ Memory has three tiers, all served by one store:
    tools registered below.
 
 Deploy:
-    hops agent create ragbench_llamaindex_agent_native.py --name ragbenchlinative \
-        --requirements ragbench_llamaindex_hap_requirements.txt \
+    hops agent create llamaindex_agent_native.py --name ragbenchlinative \
+        --requirements llamaindex_hap_requirements.txt \
         --environment python-agent-pipeline-meb10000-v1
     hops agent start ragbenchlinative --wait 600
 """

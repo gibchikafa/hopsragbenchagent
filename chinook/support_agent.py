@@ -12,7 +12,7 @@ Ported from a LangGraph/LangSmith notebook, with two substantive changes:
 
 **Catalogue lookup comes from the feature store.** The notebook embedded every
 artist, album and track name into three in-process vector stores at import time.
-Here that is a pipeline (`chinook_feature_pipeline.py`) writing one embedding
+Here that is a pipeline (`feature_pipeline.py`) writing one embedding
 feature group, and the agent queries it online. The agent no longer re-embeds a
 catalogue on every pod start, replicas share one index, and the index can be
 rebuilt without redeploying.
@@ -25,9 +25,9 @@ Chinook itself stays in SQLite: refunds delete rows transactionally, which is
 not what a feature store is for. See the note on durability by `ensure_db`.
 
 Deploy:
-    python chinook_feature_pipeline.py        # once, to build the index
-    hops agent create chinook_support_agent.py --name chinooksupport \
-        --requirements chinook_support_requirements.txt \
+    python feature_pipeline.py        # once, to build the index
+    hops agent create support_agent.py --name chinooksupport \
+        --requirements requirements.txt \
         --environment python-agent-pipeline-meb10000-v1
     hops agent start chinooksupport --wait 600
 """
