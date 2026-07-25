@@ -66,9 +66,11 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 CHINOOK_URL = "https://storage.googleapis.com/benchmarks-artifacts/chinook/Chinook.db"
 CHINOOK_DB = os.environ.get("CHINOOK_DB_PATH", "chinook.db")
 
-# Haiku for the two structured-output steps (routing and extraction) — they are
-# short, schema-constrained, and run on every turn. Override for the answering
-# model if you want more headroom on the open-ended path.
+# Same model as the RAGBench agents in ../ragbench, at temperature 0 for the
+# same reason: routing and purchase-info extraction are schema-constrained
+# steps that run on every turn, and a refund flow should not take a different
+# branch on a re-ask. Override the answering model if the open-ended path
+# needs more headroom.
 ROUTER_MODEL = os.environ.get("CHINOOK_ROUTER_MODEL", "claude-haiku-4-5")
 ANSWER_MODEL = os.environ.get("CHINOOK_ANSWER_MODEL", "claude-haiku-4-5")
 
@@ -294,7 +296,9 @@ class PurchaseInformation(TypedDict):
     ]
 
 
-info_llm = ChatAnthropic(model=ROUTER_MODEL, max_tokens=1024).with_structured_output(
+info_llm = ChatAnthropic(
+    model=ROUTER_MODEL, max_tokens=1024, temperature=0.0
+).with_structured_output(
     PurchaseInformation, include_raw=True
 )
 
@@ -478,7 +482,7 @@ def lookup_artist(
     return [r[0] for r in rows]
 
 
-qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024)
+qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
 # The memory tools go in the same list: a support agent that remembers a
 # returning customer's name and phone number is the whole point of durable
 # memory, and this is the only place they can be registered — the SDK cannot
@@ -510,9 +514,9 @@ asking a general music question. Do NOT return anything else. Do NOT try to resp
 the user.
 """
 
-router_llm = ChatAnthropic(model=ROUTER_MODEL, max_tokens=256).with_structured_output(
-    UserIntent
-)
+router_llm = ChatAnthropic(
+    model=ROUTER_MODEL, max_tokens=256, temperature=0.0
+).with_structured_output(UserIntent)
 
 
 async def intent_classifier(
