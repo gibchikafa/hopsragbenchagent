@@ -54,6 +54,7 @@ from collections import defaultdict
 
 import hopsworks
 import pandas as pd
+from hsfs.feature import Feature
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -202,6 +203,25 @@ def build_customer_purchases(conn) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
+def _json_feature(name: str) -> Feature:
+    """A JSON payload column, declared TEXT rather than left to inference.
+
+    hsfs sizes string columns from the widest value it sees and emits
+    `varchar(N)`; an online feature group's row must fit in 30000 bytes, and
+    utf8mb4 charges 4 bytes per character. The widest artist catalogue here is
+    ~17k characters, so inference produced varchar(17100) — an estimated 68832
+    byte row, which the backend rejects outright:
+
+        Cannot create an online feature group because row size > 30000 bytes
+
+    TEXT is stored out of row in RonDB, so it does not count against that limit,
+    and hsfs skips the widening entirely for a non-varchar online type. Verified
+    against a live feature store: the same frame is rejected with inferred types
+    and accepted with this one.
+    """
+    return Feature(name, type="string", online_type="text")
+
+
 def main() -> None:
     db = ensure_db()
     conn = sqlite3.connect(db)
@@ -226,6 +246,13 @@ def main() -> None:
         primary_key=["artist_name"],
         event_time="migrated_at",
         online_enabled=True,
+        features=[
+            Feature("artist_name", type="string", online_type="varchar(200)"),
+            Feature("album_count", type="int"),
+            Feature("track_count", type="int"),
+            _json_feature("albums"),
+            Feature("migrated_at", type="timestamp"),
+        ],
     )
     artist_fg.insert(artists, write_options={"wait_for_job": True})
 
@@ -236,6 +263,15 @@ def main() -> None:
         primary_key=["customer_key"],
         event_time="migrated_at",
         online_enabled=True,
+        features=[
+            Feature("customer_key", type="string", online_type="varchar(64)"),
+            Feature("first_name", type="string", online_type="varchar(100)"),
+            Feature("last_name", type="string", online_type="varchar(100)"),
+            Feature("phone", type="string", online_type="varchar(50)"),
+            Feature("line_count", type="int"),
+            _json_feature("purchases"),
+            Feature("migrated_at", type="timestamp"),
+        ],
     )
     purchases_fg.insert(purchases, write_options={"wait_for_job": True})
 
