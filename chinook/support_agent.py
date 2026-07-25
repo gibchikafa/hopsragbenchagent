@@ -559,6 +559,17 @@ qa_graph = create_react_agent(
 
 IDENTITY_KEYS = ("customer_first_name", "customer_last_name", "customer_phone")
 
+# Identity is stored per conversation, not per person, because nothing here can
+# tell us who the person is: the chat transport authenticates a project-wide
+# serving key, so `subject` is whatever the client claims and defaults to the
+# conversation id. Writing to `session` scope says that plainly instead of
+# leaning on that fallback and pretending it is per-user.
+#
+# When real end-user identity arrives — the deployment-scoped chat token the
+# panel design calls for — flipping this to "user" is the whole change needed
+# to make the ask happen once per customer rather than once per conversation.
+IDENTITY_SCOPE = "session"
+
 IDENTIFY_INSTRUCTIONS = """You are the front desk of an online music store. Your only \
 job right now is to work out who you are speaking to. From the conversation so far, \
 extract the customer's first name, last name, and the phone number on their account. \
@@ -580,19 +591,21 @@ identity_llm = ChatAnthropic(
 
 ASK_FOR_IDENTITY = (
     "Before we start — could you give me your first name, last name, and the "
-    "phone number on your account? I'll remember them, so you won't have to "
-    "tell me again next time."
+    "phone number on your account? I'll keep them for the rest of this chat."
 )
 
 
 async def identify(state: State) -> Command[Literal["intent_classifier", "__end__"]]:
     """Establish who we are talking to before doing any work.
 
-    A returning customer never sees this: the handler seeds the graph state
-    from durable memory, so all three fields are already present and the node
-    falls straight through. It only asks the first time, and what it learns is
-    stored under the `user` scope — which is the whole demonstration. The
-    refund flow downstream then never has to ask for identity again either.
+    Asked once per conversation, not once per turn: the handler seeds the graph
+    state from `session`-scoped memory, so every turn after the first falls
+    straight through without consulting the model. The refund flow downstream
+    never has to ask for name and phone either — they are already in state by
+    the time it runs.
+
+    It is once per *conversation* rather than once per *customer* only because
+    there is no login to key on; see IDENTITY_SCOPE.
     """
     if all(state.get(key) for key in IDENTITY_KEYS):
         return Command(goto="intent_classifier")
@@ -605,7 +618,7 @@ async def identify(state: State) -> Command[Literal["intent_classifier", "__end_
         for key in IDENTITY_KEYS:
             # `user` scope: durable across every future conversation for this
             # subject, and auto-injected via ctx.system_context()
-            remember(key, str(parsed[key]))
+            remember(key, str(parsed[key]), scope=IDENTITY_SCOPE)
         return Command(update={"messages": [info["raw"]], **parsed},
                        goto="intent_classifier")
 
@@ -678,8 +691,8 @@ You are a customer support agent for an online music store. Answer questions abo
 the catalogue, and help customers get refunds on tracks they bought.
 
 You are told below what you already know about this customer. Never ask again for \
-anything that appears there - greet a returning customer by name and carry on. If a \
-detail is missing, ask for it once, then remember it.
+anything that appears there - use it and carry on. If a detail is missing, ask for \
+it once, then remember it for the rest of this conversation.
 
 When a customer tells you something else that will still be true next time - how \
 they prefer to be addressed, that they want refunds as store credit - store it \
@@ -692,8 +705,7 @@ agent_app = AgentApp(
     "and refunds (LangGraph supervisor + Hopsworks feature store lookup).",
     framework="langgraph",
     welcome_message="Hi! I can answer questions about our catalogue or help you "
-    "with a refund. First time here I'll ask who you are - after that "
-    "I'll remember.",
+    "with a refund. I'll ask who you are first — just once per chat.",
     suggested_prompts=[
         "What albums do you have by Led Zeppelin?",
         "Who are the artists similar to Prince?",
@@ -730,7 +742,7 @@ async def stream(request, ctx):
     # what makes the identity gate a one-time ask rather than a per-conversation
     # one: `user`-scoped state outlives the conversation, so a returning
     # customer arrives already identified and `identify` falls straight through.
-    known = ctx.state("user")
+    known = ctx.state(IDENTITY_SCOPE)
     identity = {key: known[key] for key in IDENTITY_KEYS if known.get(key)}
 
     async for delta in ctx.stream_langchain(

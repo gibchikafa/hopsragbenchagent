@@ -34,6 +34,23 @@ a single keyed read. `customer_key` is a deterministic hash of the first name,
 last name and phone — the same three fields the refund flow already asks for, so
 the agent computes it from the conversation rather than looking it up.
 
+### Identity is asked once per conversation
+
+The graph will not route to refunds or catalogue questions until it knows the
+customer's first name, last name and phone. The `identify` node asks for them
+once, writes them to `session`-scoped memory, and the stream handler seeds the
+graph from that on every later turn — so it asks once per chat, not once per
+message, and the refund flow never has to ask again either.
+
+Once per *conversation* rather than once per *customer* is a deliberate limit,
+not an oversight. The chat transport authenticates with a project-wide serving
+key, so the agent has no trustworthy way to tell one end user from another:
+`subject` is whatever the client claims, defaulting to the conversation id.
+Storing identity in `session` scope states that honestly. When real end-user
+identity exists — the deployment-scoped chat token the panel design calls for —
+flipping `IDENTITY_SCOPE` to `"user"` is the entire change needed to make it
+once per customer, across conversations.
+
 ### Refunds are events, not deletions
 
 The original deleted Invoice and InvoiceLine rows. That cannot be ported: **a
