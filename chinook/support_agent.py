@@ -661,7 +661,9 @@ def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
 
     Call this the moment they express either:
       - `wants_to_buy` — they intend to buy it, are thinking about it, or ask
-        how to get it. You will be reminded next time so you can follow up.
+        how to get it. This records an *interest only*: it places no order,
+        charges nothing, and reserves nothing. You will be reminded next time
+        so you can follow up on whether they went ahead.
       - `likes` — they simply enjoy it, with no intent to buy. Use this for
         taste, so recommendations can be tailored later.
 
@@ -683,7 +685,17 @@ def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
             {"conversation_id": ctx.conversation_id, "turn_id": ctx.turn_id}
         ),
     )
-    return f"Noted that they {kind.replace('_', ' ')} {item.strip()!r}."
+    if kind == "wants_to_buy":
+        # Worded to be unmistakable. The model previously read "recorded" as
+        # "ordered" and told a customer their order was confirmed, when the
+        # only thing that happened was this row being written.
+        return (
+            f"Saved a note that they are interested in buying {item.strip()!r}. "
+            "NO ORDER HAS BEEN PLACED and nothing has been charged — you cannot "
+            "sell anything in this chat. Tell them you have made a note and "
+            "that they need to complete the purchase in the store itself."
+        )
+    return f"Saved a note that they like {item.strip()!r}."
 
 
 def _memory_and_ctx():
@@ -934,6 +946,13 @@ graph = _builder.compile()
 SYSTEM_PROMPT = """\
 You are a customer support agent for an online music store. Answer questions about \
 the catalogue, and help customers get refunds on tracks they bought.
+
+You CANNOT sell anything. There is no checkout in this chat: you cannot place an \
+order, take payment, reserve stock, or confirm a purchase, and no tool you have \
+does any of those things. Never tell a customer an order is placed, confirmed or \
+paid for. When they say they want to buy something, save it with \
+`remember_interest` and say plainly that you have noted it and they can complete \
+the purchase in the store — then you will be able to follow up next time.
 
 You are told below what you already know about this customer. Never ask again for \
 anything that appears there - use it and carry on. If a detail is missing, ask for \
