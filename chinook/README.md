@@ -14,9 +14,39 @@ intent_classifier ─┬─▶ refund_agent               (gather_info → looku
 
 | File | Purpose |
 |---|---|
-| `feature_pipeline.py` | Embeds every artist/album/track name into one Hopsworks embedding feature group |
+| `feature_pipeline.py` | Embeds every artist/album/track name into an embedding feature group (fuzzy name → canonical name) |
+| `migrate_to_feature_store.py` | One-off migration of Chinook out of SQLite into keyed feature groups |
 | `support_agent.py` | The agent, served by `AgentApp` |
 | `requirements.txt` | Deployment requirements |
+
+### Feature groups
+
+| Feature group | Key | Answers |
+|---|---|---|
+| `chinook_catalog_embeddings` | *(vector)* | "what is the canonical name for what the customer typed?" |
+| `chinook_artist_catalog` | `artist_name` | "what albums and tracks does this artist have?" |
+| `chinook_customer_purchases` | `customer_key` | "what did this customer buy?" |
+| `chinook_refunds` | `invoice_line_id` | "has this line already been refunded?" |
+
+The online store is a keyed lookup, not a query engine, so the migration
+denormalises around the two questions the agent actually asks and makes each one
+a single keyed read. `customer_key` is a deterministic hash of the first name,
+last name and phone — the same three fields the refund flow already asks for, so
+the agent computes it from the conversation rather than looking it up.
+
+### Refunds are events, not deletions
+
+The original deleted Invoice and InvoiceLine rows. That cannot be ported: **a
+feature group has no row-level delete reachable from a Python client.**
+`FeatureGroup.delete()` drops the entire feature group, `commit_delete_record()`
+needs Spark and a Hudi/Delta/Iceberg table, and the Python engine has no per-row
+delete at all.
+
+So `chinook_refunds` is an append-only ledger and a line counts as refunded once
+a row exists for it. Better modelling regardless of the platform — destroying
+the record of a sale loses the audit trail — but it changes behaviour: refunded
+purchases still appear in a customer's history, marked `refunded`, rather than
+vanishing.
 
 **What changed from the notebook.** The original built three in-process
 `InMemoryVectorStore`s at import time to disambiguate what a customer types
@@ -25,12 +55,13 @@ catalogue on every pod start, keeps three copies per replica, and can't be
 rebuilt without redeploying. Here it's a feature pipeline writing one embedding
 feature group that the agent queries online.
 
-Chinook itself stays in SQLite — the refund path deletes invoice rows, which is
-not what a feature store is for. The file is pod-local, so **refunds do not
-survive a restart** unless `CHINOOK_DB_PATH` points at a mounted dataset.
+There is no SQLite at runtime. `migrate_to_feature_store.py` moves Chinook into
+the feature groups above; the agent reads only from the feature store, so
+nothing is pod-local and state survives restarts.
 
 ```bash
-python feature_pipeline.py        # once, before first deploy
+python feature_pipeline.py            # catalogue name embeddings
+python migrate_to_feature_store.py    # invoices, catalogue, refund ledger
 
 hops agent create support_agent.py --name chinooksupport \
     --requirements requirements.txt \
@@ -40,6 +71,6 @@ hops agent start chinooksupport --wait 600
 
 | Variable | Default | Description |
 |---|---|---|
-| `CHINOOK_DB_PATH` | `chinook.db` | SQLite location; downloaded on first use if absent |
+| `CHINOOK_DB_PATH` | `chinook.db` | Source SQLite file — **migration scripts only**; the agent never reads it |
 | `CHINOOK_ROUTER_MODEL` | `claude-haiku-4-5` | Intent routing + purchase-info extraction |
 | `CHINOOK_ANSWER_MODEL` | `claude-haiku-4-5` | Catalogue question answering |

@@ -21,23 +21,27 @@ rebuilt without redeploying.
 health/readiness, CORS, tracing and memory are all `AgentApp`; the code here is
 just the domain.
 
-Chinook itself stays in SQLite: refunds delete rows transactionally, which is
-not what a feature store is for. See the note on durability by `ensure_db`.
+There is no SQLite anywhere: `migrate_to_feature_store.py` denormalises Chinook
+into keyed feature groups, and refunds became an append-only ledger because a
+feature group has no row-level delete reachable from Python. See that module's
+docstring for the shapes and the reasoning.
 
 Deploy:
-    python feature_pipeline.py        # once, to build the index
+    python feature_pipeline.py            # catalogue name embeddings
+    python migrate_to_feature_store.py    # invoices, catalogue, refund ledger
     hops agent create support_agent.py --name chinooksupport \
         --requirements requirements.txt \
         --environment python-agent-pipeline-meb10000-v1
     hops agent start chinooksupport --wait 600
 """
 
+import hashlib
 import json
 import logging
 import os
-import sqlite3
-import urllib.request
 from typing import Literal
+
+import pandas as pd
 
 import hopsworks
 from hopsworks_agent_protocol import (  # noqa: E501
@@ -60,11 +64,12 @@ from typing_extensions import Annotated, TypedDict
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-FG_NAME = "chinook_catalog_embeddings"
+CATALOG_FG = "chinook_catalog_embeddings"
+ARTIST_FG = "chinook_artist_catalog"
+PURCHASES_FG = "chinook_customer_purchases"
+REFUNDS_FG = "chinook_refunds"
 FG_VERSION = 1
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-CHINOOK_URL = "https://storage.googleapis.com/benchmarks-artifacts/chinook/Chinook.db"
-CHINOOK_DB = os.environ.get("CHINOOK_DB_PATH", "chinook.db")
 
 # Same model as the RAGBench agents in ../ragbench, at temperature 0 for the
 # same reason: routing and purchase-info extraction are schema-constrained
@@ -78,45 +83,66 @@ ANSWER_MODEL = os.environ.get("CHINOOK_ANSWER_MODEL", "claude-haiku-4-5")
 # ── data access ──────────────────────────────────────────────────────────────
 
 
-def ensure_db(path: str = CHINOOK_DB) -> str:
-    """Make sure the Chinook SQLite file exists locally.
-
-    Chinook stays in SQLite rather than moving to the feature store because the
-    refund path deletes invoice rows — transactional writes the feature store is
-    not designed for. Note the consequence: the file is pod-local, so refunds do
-    not survive a restart. Point ``CHINOOK_DB_PATH`` at a mounted dataset if you
-    need them to.
-    """
-    if not os.path.exists(path):
-        log.info("Downloading Chinook DB → %s", path)
-        urllib.request.urlretrieve(CHINOOK_URL, path)
-    return path
-
-
-ensure_db()
 _embed = SentenceTransformer(EMBEDDING_MODEL)
-_fs = hopsworks.login().get_feature_store()
+_project = hopsworks.login()
+_fs = _project.get_feature_store()
 _catalog_fg = None
 _catalog_features: list[str] = []
+_views: dict[str, object] = {}
+
+
+def customer_key(first_name: str, last_name: str, phone: str) -> str:
+    """Must match migrate_to_feature_store.customer_key exactly — it is the
+    primary key the purchases feature group is written under."""
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    raw = f"{(first_name or '').strip().lower()}|{(last_name or '').strip().lower()}|{digits}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:24]
+
+
+def _view(name: str):
+    """A serving-initialised feature view, cached for the process.
+
+    Online point lookups go through a feature view rather than the feature
+    group; ``init_serving`` opens the online client and is the expensive part,
+    so it happens once per view rather than per turn.
+    """
+    if name not in _views:
+        view = _fs.get_feature_view(name=name, version=FG_VERSION)
+        view.init_serving()
+        _views[name] = view
+        log.info("Feature view ready: %s", name)
+    return _views[name]
+
+
+def _lookup_one(view_name: str, entry: dict) -> dict | None:
+    """One keyed online read, or None when the key is absent."""
+    try:
+        view = _view(view_name)
+        row = view.get_feature_vector(entry, return_type="pandas")
+    except Exception:  # noqa: BLE001 — a missing key raises on some versions
+        log.exception("Lookup in %s failed for %s", view_name, entry)
+        return None
+    if row is None or getattr(row, "empty", False):
+        return None
+    return row.iloc[0].to_dict()
 
 
 def _catalog():
-    """The catalogue feature group, opened lazily and cached."""
+    """The name-embedding feature group, opened lazily and cached."""
     global _catalog_fg, _catalog_features
     if _catalog_fg is None:
-        _catalog_fg = _fs.get_feature_group(FG_NAME, version=FG_VERSION)
+        _catalog_fg = _fs.get_feature_group(CATALOG_FG, version=FG_VERSION)
         if _catalog_fg is not None:
             _catalog_features = [f.name for f in _catalog_fg.features]
-            log.info("Catalogue index ready (%s)", FG_NAME)
+            log.info("Catalogue index ready (%s)", CATALOG_FG)
     return _catalog_fg
 
 
 def resolve_name(text: str, kind: Literal["track", "artist", "album"]) -> str:
-    """Snap what the customer typed to the closest name the database stores.
+    """Snap what the customer typed to the closest name the catalogue stores.
 
-    "prince" → "Prince", so the SQL below matches. Falls back to the raw input
-    when the index is unavailable, which degrades to a plain LIKE rather than
-    failing the turn.
+    "prince" → "Prince", which is then a valid key into the artist catalogue.
+    Falls back to the raw input if the index is unavailable.
     """
     fg = _catalog()
     if fg is None or not text:
@@ -124,10 +150,9 @@ def resolve_name(text: str, kind: Literal["track", "artist", "album"]) -> str:
     try:
         vector = _embed.encode(text, normalize_embeddings=True).tolist()
         # Build the filter with get_feature(), never getattr(fg, "entity_kind").
-        # Attribute access silently returns a FeatureGroup attribute when the
-        # column name collides with one (`subject` and `description` are real
-        # examples), and the resulting `False` is translated to *no filter at
-        # all* — you get unfiltered neighbours with no error.
+        # Attribute access returns a FeatureGroup attribute when the column name
+        # collides with one, and the resulting `False` is translated to *no
+        # filter at all* — unfiltered neighbours, with no error.
         condition = fg.get_feature("entity_kind") == kind
         hits = fg.find_neighbors(vector, col="embedding", k=1, filter=condition)
     except Exception:  # noqa: BLE001 — disambiguation is best-effort
@@ -135,55 +160,100 @@ def resolve_name(text: str, kind: Literal["track", "artist", "album"]) -> str:
         return text
     if not hits:
         return text
-    row = dict(zip(_catalog_features, hits[0][1]))
-    return row.get("name") or text
+    return dict(zip(_catalog_features, hits[0][1])).get("name") or text
+
+
+def artist_catalog(artist_name: str) -> list[dict]:
+    """Every album (with its tracks) for one canonical artist name."""
+    row = _lookup_one(ARTIST_FG, {"artist_name": artist_name})
+    if not row:
+        return []
+    return json.loads(row.get("albums") or "[]")
+
+
+def _refunded_line_ids(line_ids: list[int]) -> set[int]:
+    """Which of these invoice lines already have a row in the refund ledger."""
+    refunded = set()
+    for line_id in line_ids:
+        if _lookup_one(REFUNDS_FG, {"invoice_line_id": int(line_id)}):
+            refunded.add(int(line_id))
+    return refunded
 
 
 def _refund(
     invoice_id: int | None, invoice_line_ids: list[int] | None, mock: bool = False
 ) -> float:
-    """Delete the given Invoice / InvoiceLine records, returning the amount refunded."""
-    if invoice_id is None and invoice_line_ids is None:
+    """Record a refund for the given invoice lines, returning the total refunded.
+
+    This *appends to a ledger*; it does not delete the sale. A feature group has
+    no row-level delete reachable from a Python client (``FeatureGroup.delete()``
+    drops the whole group, ``commit_delete_record`` needs Spark), and destroying
+    the record of a sale to represent a refund would lose the audit trail
+    anyway. A line counts as refunded once a row exists for it.
+    """
+    lines = list(invoice_line_ids or [])
+    if invoice_id is not None:
+        # every line on the invoice, minus anything already refunded
+        lines += [
+            line["invoice_line_id"]
+            for line in _purchases_for_invoice(invoice_id)
+            if line["invoice_line_id"] not in lines
+        ]
+    if not lines:
         return 0.0
 
-    conn = sqlite3.connect(ensure_db())
-    cursor = conn.cursor()
-    total_refund = 0.0
-    try:
-        if invoice_id is not None:
-            row = cursor.execute(
-                "SELECT Total FROM Invoice WHERE InvoiceId = ?", (invoice_id,)
-            ).fetchone()
-            if row:
-                total_refund += row[0]
-            if not mock:
-                # invoice lines first: foreign key constraints
-                cursor.execute(
-                    "DELETE FROM InvoiceLine WHERE InvoiceId = ?", (invoice_id,)
-                )
-                cursor.execute("DELETE FROM Invoice WHERE InvoiceId = ?", (invoice_id,))
+    known = {line["invoice_line_id"]: line for line in _all_known_lines(lines)}
+    already = _refunded_line_ids(lines)
+    to_refund = [line_id for line_id in lines if line_id not in already]
+    total = sum(
+        (known[i]["price_per_unit"] or 0) * (known[i]["quantity_purchased"] or 1)
+        for i in to_refund
+        if i in known
+    )
+    if mock or not to_refund:
+        return float(total)
 
-        if invoice_line_ids:
-            placeholders = ",".join("?" for _ in invoice_line_ids)
-            row = cursor.execute(
-                f"SELECT SUM(UnitPrice * Quantity) FROM InvoiceLine "
-                f"WHERE InvoiceLineId IN ({placeholders})",
-                invoice_line_ids,
-            ).fetchone()
-            if row and row[0]:
-                total_refund += row[0]
-            if not mock:
-                cursor.execute(
-                    f"DELETE FROM InvoiceLine WHERE InvoiceLineId IN ({placeholders})",
-                    invoice_line_ids,
-                )
-        conn.commit()
-    except sqlite3.Error:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-    return float(total_refund)
+    now = pd.Timestamp.utcnow().tz_localize(None)
+    frame = pd.DataFrame(
+        [
+            {
+                "invoice_line_id": int(i),
+                "invoice_id": int(known.get(i, {}).get("invoice_id") or -1),
+                "customer_key": known.get(i, {}).get("customer_key") or "",
+                "amount": float(
+                    (known.get(i, {}).get("price_per_unit") or 0)
+                    * (known.get(i, {}).get("quantity_purchased") or 1)
+                ),
+                "refunded_at": now,
+            }
+            for i in to_refund
+        ]
+    )
+    try:
+        # storage="online" is required: the offline write goes through HopsFS,
+        # which an agent pod cannot reach.
+        _fs.get_feature_group(REFUNDS_FG, version=FG_VERSION).insert(
+            frame, storage="online", write_options={"wait_for_job": False}
+        )
+    except Exception:  # noqa: BLE001 — never fail the turn on a ledger write
+        log.exception("Could not record the refund for lines %s", to_refund)
+        return 0.0
+    return float(total)
+
+
+# Purchases are fetched per customer, so the refund path keeps the lines it
+# looked up for this turn rather than re-reading them by invoice.
+_turn_lines: dict[int, dict] = {}
+
+
+def _all_known_lines(line_ids: list[int]) -> list[dict]:
+    return [_turn_lines[i] for i in line_ids if i in _turn_lines]
+
+
+def _purchases_for_invoice(invoice_id: int) -> list[dict]:
+    return [
+        line for line in _turn_lines.values() if line.get("invoice_id") == invoice_id
+    ]
 
 
 def _lookup(
@@ -195,46 +265,39 @@ def _lookup(
     artist_name: str | None,
     purchase_date_iso_8601: str | None,
 ) -> list[dict]:
-    """Invoice lines matching a customer and optional purchase filters."""
-    conn = sqlite3.connect(ensure_db())
-    cursor = conn.cursor()
-    query = """
-    SELECT il.InvoiceLineId, t.Name, art.Name, i.InvoiceDate, il.Quantity, il.UnitPrice
-    FROM InvoiceLine il
-    JOIN Invoice i ON il.InvoiceId = i.InvoiceId
-    JOIN Customer c ON i.CustomerId = c.CustomerId
-    JOIN Track t ON il.TrackId = t.TrackId
-    JOIN Album alb ON t.AlbumId = alb.AlbumId
-    JOIN Artist art ON alb.ArtistId = art.ArtistId
-    WHERE c.FirstName = ? AND c.LastName = ? AND c.Phone = ?
-    """
-    params: list = [customer_first_name, customer_last_name, customer_phone]
-    if track_name:
-        query += " AND t.Name = ?"
-        params.append(resolve_name(track_name, "track"))
-    if album_title:
-        query += " AND alb.Title = ?"
-        params.append(resolve_name(album_title, "album"))
-    if artist_name:
-        query += " AND art.Name = ?"
-        params.append(resolve_name(artist_name, "artist"))
-    if purchase_date_iso_8601:
-        query += " AND date(i.InvoiceDate) = date(?)"
-        params.append(purchase_date_iso_8601)
+    """A customer's purchases, filtered by the optional criteria.
 
-    rows = cursor.execute(query, params).fetchall()
-    conn.close()
-    return [
-        {
-            "invoice_line_id": r[0],
-            "track_name": r[1],
-            "artist_name": r[2],
-            "purchase_date": r[3],
-            "quantity_purchased": r[4],
-            "price_per_unit": r[5],
-        }
-        for r in rows
-    ]
+    One keyed read returns everything the customer bought; the filtering that
+    used to be SQL happens here, over tens of rows. Already-refunded lines are
+    annotated rather than hidden — the ledger records refunds, it does not erase
+    the sale.
+    """
+    key = customer_key(customer_first_name, customer_last_name, customer_phone)
+    row = _lookup_one(PURCHASES_FG, {"customer_key": key})
+    if not row:
+        return []
+    lines = json.loads(row.get("purchases") or "[]")
+    for line in lines:
+        line["customer_key"] = key
+
+    if track_name:
+        wanted = resolve_name(track_name, "track")
+        lines = [line for line in lines if line["track_name"] == wanted]
+    if album_title:
+        wanted = resolve_name(album_title, "album")
+        lines = [line for line in lines if line["album_title"] == wanted]
+    if artist_name:
+        wanted = resolve_name(artist_name, "artist")
+        lines = [line for line in lines if line["artist_name"] == wanted]
+    if purchase_date_iso_8601:
+        day = purchase_date_iso_8601[:10]
+        lines = [line for line in lines if (line["purchase_date"] or "")[:10] == day]
+
+    refunded = _refunded_line_ids([line["invoice_line_id"] for line in lines])
+    for line in lines:
+        line["refunded"] = line["invoice_line_id"] in refunded
+    _turn_lines.update({line["invoice_line_id"]: line for line in lines})
+    return lines
 
 
 # ── refund sub-agent ─────────────────────────────────────────────────────────
@@ -394,29 +457,42 @@ def lookup_track(
 
     Returns a list of dicts with keys {'track_name', 'artist_name', 'album_name'}.
     """
-    conn = sqlite3.connect(ensure_db())
-    query = """
-    SELECT DISTINCT t.Name, ar.Name, al.Title
-    FROM Track t
-    JOIN Album al ON t.AlbumId = al.AlbumId
-    JOIN Artist ar ON al.ArtistId = ar.ArtistId
-    WHERE 1=1
-    """
-    params: list = []
-    if track_name:
-        query += " AND t.Name LIKE ?"
-        params.append(f"%{resolve_name(track_name, 'track')}%")
-    if album_title:
-        query += " AND al.Title LIKE ?"
-        params.append(f"%{resolve_name(album_title, 'album')}%")
     if artist_name:
-        query += " AND ar.Name LIKE ?"
-        params.append(f"%{resolve_name(artist_name, 'artist')}%")
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-    return [
-        {"track_name": r[0], "artist_name": r[1], "album_name": r[2]} for r in rows
-    ]
+        canonical = resolve_name(artist_name, "artist")
+        results = [
+            {
+                "track_name": track["track_name"],
+                "artist_name": canonical,
+                "album_name": album["album_title"],
+            }
+            for album in artist_catalog(canonical)
+            for track in album["tracks"]
+        ]
+    elif album_title or track_name:
+        # no artist given: resolve the album or track name, then find the artist
+        # it belongs to by resolving that name back through the catalogue index
+        wanted_album = resolve_name(album_title, "album") if album_title else None
+        wanted_track = resolve_name(track_name, "track") if track_name else None
+        canonical = resolve_name(wanted_album or wanted_track, "artist")
+        results = [
+            {
+                "track_name": track["track_name"],
+                "artist_name": canonical,
+                "album_name": album["album_title"],
+            }
+            for album in artist_catalog(canonical)
+            for track in album["tracks"]
+        ]
+    else:
+        return []
+
+    if album_title:
+        wanted = resolve_name(album_title, "album")
+        results = [r for r in results if r["album_name"] == wanted]
+    if track_name:
+        wanted = resolve_name(track_name, "track")
+        results = [r for r in results if r["track_name"] == wanted]
+    return results
 
 
 @tool
@@ -429,27 +505,19 @@ def lookup_album(
 
     Returns a list of dicts with keys {'album_name', 'artist_name'}.
     """
-    conn = sqlite3.connect(ensure_db())
-    query = """
-    SELECT DISTINCT al.Title, ar.Name
-    FROM Album al
-    JOIN Artist ar ON al.ArtistId = ar.ArtistId
-    LEFT JOIN Track t ON t.AlbumId = al.AlbumId
-    WHERE 1=1
-    """
-    params: list = []
-    if track_name:
-        query += " AND t.Name LIKE ?"
-        params.append(f"%{resolve_name(track_name, 'track')}%")
+    canonical = resolve_name(
+        artist_name or album_title or track_name or "", "artist"
+    )
+    albums = artist_catalog(canonical)
     if album_title:
-        query += " AND al.Title LIKE ?"
-        params.append(f"%{resolve_name(album_title, 'album')}%")
-    if artist_name:
-        query += " AND ar.Name LIKE ?"
-        params.append(f"%{resolve_name(artist_name, 'artist')}%")
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-    return [{"album_name": r[0], "artist_name": r[1]} for r in rows]
+        wanted = resolve_name(album_title, "album")
+        albums = [a for a in albums if a["album_title"] == wanted]
+    if track_name:
+        wanted = resolve_name(track_name, "track")
+        albums = [
+            a for a in albums if any(t["track_name"] == wanted for t in a["tracks"])
+        ]
+    return [{"album_name": a["album_title"], "artist_name": canonical} for a in albums]
 
 
 @tool
@@ -459,27 +527,12 @@ def lookup_artist(
     artist_name: str | None = None,
 ) -> list[str]:
     """Look up artists in the store's catalogue. Returns matching artist names."""
-    conn = sqlite3.connect(ensure_db())
-    query = """
-    SELECT DISTINCT ar.Name
-    FROM Artist ar
-    LEFT JOIN Album al ON al.ArtistId = ar.ArtistId
-    LEFT JOIN Track t ON t.AlbumId = al.AlbumId
-    WHERE 1=1
-    """
-    params: list = []
-    if track_name:
-        query += " AND t.Name LIKE ?"
-        params.append(f"%{resolve_name(track_name, 'track')}%")
-    if album_title:
-        query += " AND al.Title LIKE ?"
-        params.append(f"%{resolve_name(album_title, 'album')}%")
-    if artist_name:
-        query += " AND ar.Name LIKE ?"
-        params.append(f"%{resolve_name(artist_name, 'artist')}%")
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-    return [r[0] for r in rows]
+    hint = artist_name or album_title or track_name
+    if not hint:
+        return []
+    canonical = resolve_name(hint, "artist")
+    # a row exists for every artist, so an empty catalogue still confirms the name
+    return [canonical] if artist_catalog(canonical) is not None else []
 
 
 qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
