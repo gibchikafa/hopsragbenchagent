@@ -87,9 +87,12 @@ IDENTITY_KEYS = ("customer_first_name", "customer_last_name", "customer_phone")
 
 # Identity is stored per conversation, not per person, because nothing here can
 # tell us who the person is: the chat transport authenticates a project-wide
-# serving key, so `subject` is whatever the client claims and defaults to the
-# conversation id. Writing to `session` scope says that plainly instead of
-# leaning on that fallback and pretending it is per-user.
+# serving key, so `subject` is whatever the client claims. From the Hopsworks
+# panel that is the logged-in Hopsworks user (`meb10000`) — one stable value
+# shared by every conversation and every customer the agent talks to. So
+# `user` scope here means "everyone who reaches this deployment", not "this
+# person", and anything written there is read back by the next conversation.
+# Writing identity to `session` scope says that plainly.
 #
 # When real end-user identity arrives — the deployment-scoped chat token the
 # panel design calls for — flipping this to "user" is the whole change needed
@@ -989,7 +992,15 @@ qa_graph = create_react_agent(
         purchase_history,
         place_order,
         remember_interest,
-        *memory_tools("langgraph"),
+        # Read-only memory tools only. `remember` defaults to `user` scope,
+        # owned by ctx.subject — and the subject here is the Hopsworks user, the
+        # same value for every conversation. Offering it alongside a
+        # session-scoped identity gate let the model promote "Patrick Gray" to
+        # the subject in one conversation and be greeted by it in the next,
+        # under a key (`customer_name`) the gate never writes. Durable writes in
+        # this agent go through `remember_interest`, which is keyed on
+        # customer_key rather than on whoever is holding the serving key.
+        *memory_tools("langgraph", include=("recall", "search")),
     ],
 )
 
@@ -1074,8 +1085,10 @@ async def identify(state: State) -> Command[Literal["intent_classifier", "__end_
     )
     if all(parsed.get(key) for key in IDENTITY_KEYS):
         for key in IDENTITY_KEYS:
-            # `user` scope: durable across every future conversation for this
-            # subject, and auto-injected via ctx.system_context()
+            # `session` scope (see IDENTITY_SCOPE): owned by the conversation
+            # id, so it dies with the conversation and the next one asks again.
+            # Deliberately not `user` — that is owned by ctx.subject, which is
+            # the serving-key holder, not the customer.
             remember(key, str(parsed[key]), scope=IDENTITY_SCOPE)
         # NB: do not put info["raw"] into `messages`. ChatAnthropic implements
         # with_structured_output via tool calling, so the raw reply is an assistant
@@ -1228,9 +1241,12 @@ async def stream(request, ctx):
     messages.append({"role": "user", "content": request.text})
 
     # Seed the graph with whatever we already know about this customer. This is
-    # what makes the identity gate a one-time ask rather than a per-conversation
-    # one: `user`-scoped state outlives the conversation, so a returning
-    # customer arrives already identified and `identify` falls straight through.
+    # what makes the identity gate a once-per-conversation ask rather than a
+    # once-per-turn one: `session`-scoped state outlives the turn, so every turn
+    # after the first arrives already identified and `identify` falls straight
+    # through. A new conversation asks again, by design — nothing here can
+    # authenticate anyone, so identity must not outlive the conversation it was
+    # asserted in.
     # Not every reply comes from a model. `identify` asks for details, `lookup`
     # renders the purchase table and `refund` confirms the amount — all written
     # straight into graph state by a node. ctx.stream_langchain only yields
