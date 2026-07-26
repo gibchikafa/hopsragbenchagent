@@ -37,6 +37,7 @@ Deploy:
 
 import contextvars
 import hashlib
+import random
 import json
 import logging
 import os
@@ -144,6 +145,15 @@ def _view(name: str):
     """
     if name not in _views:
         view = _fs.get_feature_view(name=name, version=FG_VERSION)
+        if view is None:
+            # hsfs returns None rather than raising for a view that was never
+            # created, so without this the caller sees an AttributeError on
+            # None and has to guess why. The cause is almost always that the
+            # migration job has not run against this project yet.
+            raise LookupError(
+                f"Feature view {name!r} v{FG_VERSION} does not exist — "
+                "run chinook/migrate_to_feature_store.py first"
+            )
         view.init_serving()
         _views[name] = view
         log.info("Feature view ready: %s", name)
@@ -186,8 +196,11 @@ def _lookup_many(view_name: str, entries: list[dict]) -> list[dict]:
         return []
     if frame is None or getattr(frame, "empty", True):
         return []
-    # a key that does not exist comes back as a row of nulls, same as the
-    # single-key read
+    # Unlike the single-key read, which returns one row of nulls for a missing
+    # key, the batch read simply omits it: N keys can come back as fewer than N
+    # rows, in unspecified order. So nothing here may assume the result lines up
+    # positionally with `entries` — the rows carry their own keys. The null-row
+    # filter below is belt-and-braces for the single-key shape leaking in.
     return [
         row.to_dict()
         for _, row in frame.iterrows()
@@ -676,6 +689,166 @@ def purchase_history(
     return list(albums.values())
 
 
+# Ids for orders the agent places. Well above the migrated range (Chinook's
+# invoice lines end at 2240) so anything the agent created is obvious at a
+# glance, and wide enough that a collision is not a practical concern.
+_NEW_ID_FLOOR = 10_000_000
+_NEW_ID_CEIL = 10**12
+
+
+def _new_id() -> int:
+    return random.randrange(_NEW_ID_FLOOR, _NEW_ID_CEIL)
+
+
+@tool
+def place_order(
+    artist_name: str,
+    album_title: str | None = None,
+    track_name: str | None = None,
+) -> str:
+    """Record an order for an album or a single track.
+
+    Call this only when the customer has clearly said they want to buy
+    something specific — not when they are still browsing or asking what is
+    available. Give `artist_name` always, then either `album_title` for the
+    whole album or `track_name` for one track.
+
+    This RECORDS the order against their account. It does not take payment:
+    there is no card, no charge and no delivery in this chat. Say that when you
+    confirm, so nobody believes they have paid.
+    """
+    memory_identity = _current_identity.get()
+    missing = [key for key in IDENTITY_KEYS if not memory_identity.get(key)]
+    if missing:
+        return (
+            "I can't place an order without knowing who the customer is. Ask "
+            "for their first name, last name and account phone number first."
+        )
+    if not album_title and not track_name:
+        return "Ask which album or which track they want before ordering."
+
+    canonical_artist = resolve_name(artist_name, "artist")
+    albums = artist_catalog(canonical_artist)
+    if not albums:
+        return f"I couldn't find {artist_name!r} in the catalogue."
+
+    if album_title:
+        wanted = resolve_name(album_title, "album")
+        matched = [a for a in albums if a["album_title"] == wanted]
+        if not matched:
+            return (
+                f"{canonical_artist} doesn't have an album called "
+                f"{album_title!r} in our catalogue."
+            )
+        album = matched[0]
+        chosen = [(album["album_title"], t) for t in album["tracks"]]
+    else:
+        wanted = resolve_name(track_name, "track")
+        chosen = [
+            (a["album_title"], t)
+            for a in albums
+            for t in a["tracks"]
+            if t["track_name"] == wanted
+        ][:1]
+        if not chosen:
+            return (
+                f"I couldn't find a track called {track_name!r} by "
+                f"{canonical_artist}."
+            )
+
+    key = customer_key(
+        memory_identity["customer_first_name"],
+        memory_identity["customer_last_name"],
+        memory_identity["customer_phone"],
+    )
+    invoice_id = _new_id()
+    now = pd.Timestamp.utcnow().tz_localize(None)
+    rows = [
+        {
+            "invoice_line_id": _new_id(),
+            "customer_key": key,
+            "invoice_id": invoice_id,
+            "track_name": track["track_name"],
+            "artist_name": canonical_artist,
+            "album_title": album_name,
+            "purchase_date": now.isoformat(),
+            "quantity_purchased": 1,
+            "price_per_unit": float(track.get("unit_price") or 0.0),
+            "migrated_at": now,
+        }
+        for album_name, track in chosen
+    ]
+    if not _record_order(key, rows):
+        return (
+            "Something went wrong writing the order — tell the customer it did "
+            "not go through and that nothing has been charged."
+        )
+
+    total = sum(r["price_per_unit"] for r in rows)
+    what = (
+        f"{len(rows)} tracks from {chosen[0][0]!r}"
+        if album_title
+        else f"{chosen[0][1]['track_name']!r}"
+    )
+    return (
+        f"Order recorded: {what} by {canonical_artist}, ${total:.2f}. "
+        "No payment was taken — say the order is on their account and that "
+        "nothing has been charged."
+    )
+
+
+def _record_order(key: str, rows: list[dict]) -> bool:
+    """Append the lines, then add their ids to the customer's index.
+
+    Order matters: the lines go in first, so a failure between the two writes
+    leaves rows nothing points at — invisible, and harmless. The reverse would
+    leave the index advertising lines that do not exist, and every later read
+    of that customer would come back short.
+    """
+    if not _ensure_ready():
+        return False
+    try:
+        _fs.get_feature_group(PURCHASES_FG, version=FG_VERSION).insert(
+            pd.DataFrame(rows),
+            storage="online",
+            write_options={"wait_for_job": False},
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("Could not write order lines for %s", key)
+        return False
+
+    # Re-read immediately before writing rather than reusing anything fetched
+    # earlier in the turn, to keep the read-modify-write window as short as
+    # possible. It is still a window: two orders placed for the same customer
+    # at the same instant can lose one set of ids from the index. Acceptable
+    # here, and the fix would be a per-customer lock or an append-only index.
+    customer = _lookup_one(CUSTOMERS_FG, {"customer_key": key})
+    if not customer:
+        log.error("No customer row for %s; order lines are orphaned", key)
+        return False
+    try:
+        existing = json.loads(customer.get("line_ids") or "[]")
+    except (TypeError, ValueError):
+        existing = []
+    merged = sorted({*existing, *(int(r["invoice_line_id"]) for r in rows)})
+    customer["line_ids"] = json.dumps(merged)
+    customer["line_count"] = len(merged)
+    try:
+        _fs.get_feature_group(CUSTOMERS_FG, version=FG_VERSION).insert(
+            pd.DataFrame([customer]),
+            storage="online",
+            write_options={"wait_for_job": False},
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("Wrote order lines for %s but could not update the index", key)
+        return False
+    return True
+
+
+def _ensure_ready() -> bool:
+    return _fs is not None
+
+
 def _interest_owner(identity: dict | None = None) -> str | None:
     """The durable-memory owner for the customer in this turn, or None."""
     identity = identity if identity is not None else _current_identity.get()
@@ -693,10 +866,11 @@ def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
     """Record something the customer feels about an album, artist or track.
 
     Call this the moment they express either:
-      - `wants_to_buy` — they intend to buy it, are thinking about it, or ask
-        how to get it. This records an *interest only*: it places no order,
-        charges nothing, and reserves nothing. You will be reminded next time
-        so you can follow up on whether they went ahead.
+      - `wants_to_buy` — they are thinking about buying it, or asked how to
+        get it, but have not decided. This records an *interest only*: it
+        places no order and charges nothing. Use `place_order` instead once
+        they actually commit. You will be reminded next time so you can follow
+        up on whether they went ahead.
       - `likes` — they simply enjoy it, with no intent to buy. Use this for
         taste, so recommendations can be tailored later.
 
@@ -724,9 +898,10 @@ def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
         # only thing that happened was this row being written.
         return (
             f"Saved a note that they are interested in buying {item.strip()!r}. "
-            "NO ORDER HAS BEEN PLACED and nothing has been charged — you cannot "
-            "sell anything in this chat. Tell them you have made a note and "
-            "that they need to complete the purchase in the store itself."
+            "This is only a note of interest: NO ORDER HAS BEEN PLACED and "
+            "nothing has been charged. If they want to buy it now, use "
+            "place_order; otherwise tell them you have made a note and will "
+            "follow it up next time."
         )
     return f"Saved a note that they like {item.strip()!r}."
 
@@ -812,6 +987,7 @@ qa_graph = create_react_agent(
         lookup_artist,
         lookup_album,
         purchase_history,
+        place_order,
         remember_interest,
         *memory_tools("langgraph"),
     ],
@@ -980,12 +1156,14 @@ SYSTEM_PROMPT = """\
 You are a customer support agent for an online music store. Answer questions about \
 the catalogue, and help customers get refunds on tracks they bought.
 
-You CANNOT sell anything. There is no checkout in this chat: you cannot place an \
-order, take payment, reserve stock, or confirm a purchase, and no tool you have \
-does any of those things. Never tell a customer an order is placed, confirmed or \
-paid for. When they say they want to buy something, save it with \
-`remember_interest` and say plainly that you have noted it and they can complete \
-the purchase in the store — then you will be able to follow up next time.
+You can record an order with `place_order`, but you CANNOT take payment. Nothing \
+in this chat charges a card, and no money moves. So when an order goes through, \
+say it is recorded on their account and that nothing has been charged — never \
+say it is paid for, or that a card has been billed.
+
+Only call `place_order` once the customer has clearly said they want a specific \
+album or track. If they are still browsing, or only said they like something, \
+use `remember_interest` instead so you can follow it up next time.
 
 You are told below what you already know about this customer. Never ask again for \
 anything that appears there - use it and carry on. If a detail is missing, ask for \
