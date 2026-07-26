@@ -41,6 +41,7 @@ import random
 import json
 import logging
 import os
+import re
 from typing import Literal
 
 import pandas as pd
@@ -1034,6 +1035,8 @@ qa_graph = create_react_agent(
 IDENTIFY_INSTRUCTIONS = """You are the front desk of an online music store. Your only \
 job right now is to work out who you are speaking to. From the conversation so far, \
 extract the customer's first name, last name, and the phone number on their account. \
+If instead they gave a customer key — a long string of letters and digits — put that \
+in customer_key and leave the other fields null; it identifies them on its own. \
 Do not guess or invent any of them — leave a field null if the customer has not said \
 it. Do not answer any other question yet."""
 
@@ -1044,6 +1047,9 @@ class CustomerIdentity(TypedDict):
     customer_first_name: str | None
     customer_last_name: str | None
     customer_phone: str | None
+    # An alternative to the three fields above, not an addition: the primary key
+    # of the customers feature group, which resolves to all three.
+    customer_key: str | None
 
 
 identity_llm = ChatAnthropic(
@@ -1052,7 +1058,8 @@ identity_llm = ChatAnthropic(
 
 ASK_FOR_IDENTITY = (
     "Before we start — could you give me your first name, last name, and the "
-    "phone number on your account? I'll keep them for the rest of this chat."
+    "phone number on your account? If you have your customer key to hand, that "
+    "works on its own. I'll keep them for the rest of this chat."
 )
 
 
@@ -1085,6 +1092,48 @@ def _clean_identity(parsed: dict) -> dict:
     return cleaned
 
 
+# customer_key is a truncated sha256 (see customer_key()), so anything that is
+# not exactly that shape was not one — checked before it reaches the store so a
+# hallucinated "key" is a re-ask rather than a lookup for nobody.
+_KEY_RE = re.compile(r"^[0-9a-f]{24}$")
+
+
+def _identity_from_key(parsed: dict) -> dict:
+    """Resolve a customer key the customer quoted back into name and phone.
+
+    The key is the primary key of `chinook_customers`, so this is one point
+    lookup. Returning the row's own name and phone rather than the key alone
+    keeps every downstream caller working on the three fields it already
+    expects — including `_interest_owner`, which recomputes the key from them
+    and, because the row is what the key was derived from, arrives back at the
+    same string.
+
+    This is identification, not authentication, exactly as name-and-phone is:
+    the key is derived deterministically from those same three fields and is
+    visible in the feature-group browser, so it proves possession of a
+    reference, not ownership of the account. It grants nothing that answering
+    "I'm Aaron Mitchell on +1 (204) 452-6452" would not.
+    """
+    raw = parsed.get("customer_key")
+    if raw is None:
+        return {}
+    key = str(raw).strip().lower()
+    if key in _MISSING_MARKERS or not _KEY_RE.match(key):
+        return {}
+    row = _lookup_one(CUSTOMERS_FG, {"customer_key": key})
+    if not row:
+        log.info("Customer key %r matched no customer", key)
+        return {}
+    resolved = {
+        "customer_first_name": row.get("first_name"),
+        "customer_last_name": row.get("last_name"),
+        "customer_phone": row.get("phone"),
+    }
+    if not all(resolved.values()):
+        return {}
+    return {k: str(v) for k, v in resolved.items()}
+
+
 async def identify(state: State) -> Command[Literal["intent_classifier", "__end__"]]:
     """Establish who we are talking to before doing any work.
 
@@ -1100,12 +1149,18 @@ async def identify(state: State) -> Command[Literal["intent_classifier", "__end_
     if all(state.get(key) for key in IDENTITY_KEYS):
         return Command(goto="intent_classifier")
 
-    parsed = _clean_identity(
+    extracted = (
         await identity_llm.ainvoke(
             [{"role": "system", "content": IDENTIFY_INSTRUCTIONS}, *state["messages"]]
         )
         or {}
     )
+    parsed = _clean_identity(extracted)
+    if not all(parsed.get(key) for key in IDENTITY_KEYS):
+        # A quoted customer key stands in for all three fields. Only consulted
+        # when they are not already complete, so a customer who gave their name
+        # and phone is never overridden by a key they mentioned in passing.
+        parsed = _identity_from_key(extracted) or parsed
     if all(parsed.get(key) for key in IDENTITY_KEYS):
         # The chatbot just asked who it is talking to and got an answer, so
         # bind durable memory to that customer for the rest of the turn. Until
