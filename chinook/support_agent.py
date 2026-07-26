@@ -853,7 +853,13 @@ def _ensure_ready() -> bool:
 
 
 def _interest_owner(identity: dict | None = None) -> str | None:
-    """The durable-memory owner for the customer in this turn, or None."""
+    """The durable-memory owner for the customer in this turn, or None.
+
+    The single definition of "who this is" in the agent. `ctx.rebind_subject`
+    is fed from here too, so `ctx.subject` and this value are the same string
+    by construction — durable state written through the SDK's own `remember`
+    and state written here land on the same customer.
+    """
     identity = identity if identity is not None else _current_identity.get()
     if not all(identity.get(key) for key in IDENTITY_KEYS):
         return None
@@ -862,6 +868,23 @@ def _interest_owner(identity: dict | None = None) -> str | None:
         identity["customer_last_name"],
         identity["customer_phone"],
     )
+
+
+def _rebind_to_customer(identity: dict | None = None) -> str | None:
+    """Point the SDK's durable memory at the customer, not the serving key.
+
+    Called from both places identity becomes known: `identify` when the model
+    has just extracted it, and the handler when it was already in session state
+    from an earlier turn. Idempotent — the second call in a conversation is a
+    no-op because the subject already matches.
+    """
+    owner = _interest_owner(identity)
+    if owner is None:
+        return None
+    _, ctx = _memory_and_ctx()
+    if ctx is not None:
+        ctx.rebind_subject(owner)
+    return owner
 
 
 @tool
@@ -992,15 +1015,15 @@ qa_graph = create_react_agent(
         purchase_history,
         place_order,
         remember_interest,
-        # Read-only memory tools only. `remember` defaults to `user` scope,
-        # owned by ctx.subject — and the subject here is the Hopsworks user, the
-        # same value for every conversation. Offering it alongside a
-        # session-scoped identity gate let the model promote "Patrick Gray" to
-        # the subject in one conversation and be greeted by it in the next,
-        # under a key (`customer_name`) the gate never writes. Durable writes in
-        # this agent go through `remember_interest`, which is keyed on
-        # customer_key rather than on whoever is holding the serving key.
-        *memory_tools("langgraph", include=("recall", "search")),
+        # The full set, including `remember`, which writes `user` scope owned by
+        # ctx.subject. That is safe here only because of a graph invariant:
+        # `identify` is the entry point and exits to END unless it establishes
+        # who the customer is, so no tool-bearing node is reachable before
+        # `_rebind_to_customer` has pointed the subject at that customer.
+        # Reorder the graph so a tool can run ahead of `identify` and the model
+        # would again be able to write one customer's details where the next
+        # conversation reads them — that is the bug this replaced.
+        *memory_tools("langgraph"),
     ],
 )
 
@@ -1084,6 +1107,13 @@ async def identify(state: State) -> Command[Literal["intent_classifier", "__end_
         or {}
     )
     if all(parsed.get(key) for key in IDENTITY_KEYS):
+        # The chatbot just asked who it is talking to and got an answer, so
+        # bind durable memory to that customer for the rest of the turn. Until
+        # now `subject` was whatever the client asserted — from the Hopsworks
+        # panel, the logged-in operator, which is the same value for every
+        # customer. Everything subject-keyed (`user` scope, system_context,
+        # search) follows this.
+        _rebind_to_customer(parsed)
         for key in IDENTITY_KEYS:
             # `session` scope (see IDENTITY_SCOPE): owned by the conversation
             # id, so it dies with the conversation and the next one asks again.
@@ -1229,6 +1259,12 @@ async def stream(request, ctx):
     identity = {key: known[key] for key in IDENTITY_KEYS if known.get(key)}
     # published for the tools, which the model calls without graph state
     _current_identity.set(identity)
+    # Before ctx.system_context(), which reads `user` scope keyed on the
+    # subject: rebinding after it would build the prompt for the wrong person.
+    # On the very first turn of a conversation identity is not known yet, so
+    # `identify` rebinds mid-turn instead and this turn's prompt carries no
+    # durable block — the turn after it does.
+    _rebind_to_customer(identity)
 
     system = SYSTEM_PROMPT + ctx.system_context()
     # What we remember about this customer from previous conversations,
