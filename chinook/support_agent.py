@@ -1016,15 +1016,14 @@ qa_graph = create_react_agent(
         purchase_history,
         place_order,
         remember_interest,
-        # The full set, including `remember`, which writes `user` scope owned by
-        # ctx.subject. That is safe here only because of a graph invariant:
-        # `identify` is the entry point and exits to END unless it establishes
-        # who the customer is, so no tool-bearing node is reachable before
-        # `_rebind_to_customer` has pointed the subject at that customer.
-        # Reorder the graph so a tool can run ahead of `identify` and the model
-        # would again be able to write one customer's details where the next
-        # conversation reads them — that is the bug this replaced.
-        *memory_tools("langgraph"),
+        # Read tools only. `rebind_subject` made the generic `remember` *safe*
+        # here — `user` scope is the customer now, not the serving key — but
+        # safe is not the same as useful: offering it beside `remember_interest`
+        # gave the model two overlapping ways to store the same kind of fact,
+        # and in practice it stored nothing and said it had. One writer per kind
+        # of fact, and `remember_interest` is it. `search` and `recall` only
+        # read, so they cannot be confused for a way to record something.
+        *memory_tools("langgraph", include=("recall", "search")),
     ],
 )
 
@@ -1269,10 +1268,11 @@ it once, then remember it for the rest of this conversation.
 
 When a customer says they want to buy something, or that they simply like an \
 album or artist, record it with `remember_interest`. That outlives the \
-conversation, so next time you can pick the thread back up. Anything else that \
-stays true - how they prefer to be addressed, that they want refunds as store \
-credit - goes in `remember`. Do not store catalogue facts in either; look \
-those up.\
+conversation, so next time you can pick the thread back up. Never tell a \
+customer you have noted, recorded or saved an interest unless you called \
+`remember_interest` in this turn and it succeeded - if you did not call it, \
+you did not record anything. `search` only looks at what is already stored; it \
+never stores. Do not store catalogue facts; look those up.\
 """
 
 agent_app = AgentApp(
