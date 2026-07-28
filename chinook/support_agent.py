@@ -709,18 +709,39 @@ def place_order(
     artist_name: str,
     album_title: str | None = None,
     track_name: str | None = None,
+    customer_asked_to_buy: bool = False,
 ) -> str:
     """Record an order for an album or a single track.
 
-    Call this only when the customer has clearly said they want to buy
-    something specific — not when they are still browsing or asking what is
-    available. Give `artist_name` always, then either `album_title` for the
-    whole album or `track_name` for one track.
+    Set `customer_asked_to_buy` only when the customer has *told you to buy
+    it* — "buy it", "order it", "I'll take it", or a plain yes to a direct
+    question you asked about placing the order. Saying they are **interested**,
+    that they **like** it, that they **want** it, or that they are thinking
+    about it is NOT that: it is an interest, and it is recorded as one.
+
+    Leave the flag false when you are unsure. Doing so records the interest and
+    tells you to ask, which costs one question. Getting it wrong the other way
+    puts an order on someone's account that they did not ask for.
+
+    Give `artist_name` always, then either `album_title` for the whole album or
+    `track_name` for one track.
 
     This RECORDS the order against their account. It does not take payment:
     there is no card, no charge and no delivery in this chat. Say that when you
     confirm, so nobody believes they have paid.
     """
+    if not customer_asked_to_buy:
+        # The safe default is deliberate. An order the customer did not ask for
+        # is worse than an extra question, so an unconfirmed call degrades into
+        # the thing they probably did mean.
+        item = album_title or track_name or artist_name
+        noted = _record_interest(item, "wants_to_buy")
+        return (
+            f"No order placed — that sounded like interest rather than an "
+            f"instruction to buy. {noted} Ask them directly whether they want "
+            f"you to place the order for {item!r}, and call this again with "
+            f"customer_asked_to_buy=True only if they say yes."
+        )
     memory_identity = _current_identity.get()
     missing = [key for key in IDENTITY_KEYS if not memory_identity.get(key)]
     if missing:
@@ -888,22 +909,12 @@ def _rebind_to_customer(identity: dict | None = None) -> str | None:
     return owner
 
 
-@tool
-def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
-    """Record something the customer feels about an album, artist or track.
+def _record_interest(item: str, kind: str) -> str:
+    """Store an interest. Shared by the tool and by an unconfirmed order.
 
-    Call this the moment they express either:
-      - `wants_to_buy` — they are thinking about buying it, or asked how to
-        get it, but have not decided. This records an *interest only*: it
-        places no order and charges nothing. Use `place_order` instead once
-        they actually commit. You will be reminded next time so you can follow
-        up on whether they went ahead.
-      - `likes` — they simply enjoy it, with no intent to buy. Use this for
-        taste, so recommendations can be tailored later.
-
-    Use their words for `item` (an album, artist or track name). Do not use
-    this for anything they have already bought — that is in their order
-    history.
+    A plain function rather than a call into the decorated tool: `remember_interest`
+    is a StructuredTool once decorated, and reaching through it for the callable
+    couples this to the decorator's internals.
     """
     memory, ctx = _memory_and_ctx()
     owner = _interest_owner()
@@ -931,6 +942,28 @@ def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
             "follow it up next time."
         )
     return f"Saved a note that they like {item.strip()!r}."
+
+
+@tool
+def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
+    """Record something the customer feels about an album, artist or track.
+
+    Call this the moment they express either:
+      - `wants_to_buy` — they are interested in it, like the sound of it, want
+        it, or are thinking about buying it, but have not told you to buy it.
+        "I'm interested in this album", "I'd love to have this one" and "I
+        might get this" all belong here. This records an *interest only*: it
+        places no order and charges nothing. Use `place_order` only once they
+        tell you to buy it. You will be reminded next time so you can follow up
+        on whether they went ahead.
+      - `likes` — they simply enjoy it, with no intent to buy. Use this for
+        taste, so recommendations can be tailored later.
+
+    Use their words for `item` (an album, artist or track name). Do not use
+    this for anything they have already bought — that is in their order
+    history.
+    """
+    return _record_interest(item, kind)
 
 
 def _memory_and_ctx():
@@ -1257,6 +1290,13 @@ You can record an order with `place_order`, but you CANNOT take payment. Nothing
 in this chat charges a card, and no money moves. So when an order goes through, \
 say it is recorded on their account and that nothing has been charged — never \
 say it is paid for, or that a card has been billed.
+
+Being interested in something is not asking to buy it. "I'm interested in this \
+album", "I like this one" and "I want this" are interests: record them with \
+`remember_interest` and then ask whether they would like you to place the \
+order. Only order when they have told you to — "buy it", "order it", or a yes \
+to that question. If you asked "would you like to buy this?" and they replied \
+with something other than a clear yes, ask again rather than assuming.
 
 Only call `place_order` once the customer has clearly said they want a specific \
 album or track. If they are still browsing, or only said they like something, \
