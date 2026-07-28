@@ -1120,11 +1120,25 @@ _VAGUE_ITEMS = frozenset(
 )
 
 
+#: How much of the conversation the extractor sees. Enough to resolve "this
+#: one" against the album that was named a turn or two ago, not so much that a
+#: cheap model loses the thread.
+_INTEREST_CONTEXT_TURNS = 6
+
+
 def _is_vague(item: str) -> bool:
-    return item.strip().strip('"\'').lower() in _VAGUE_ITEMS
+    cleaned = item.strip().strip('"\'').lower()
+    # <UNKNOWN>, N/A and friends: structured output makes `item` required, so a
+    # model that cannot name the thing returns a placeholder rather than
+    # omitting it. Storing one would be worse than storing nothing.
+    if cleaned.startswith("<") and cleaned.endswith(">"):
+        return True
+    return cleaned in _VAGUE_ITEMS or cleaned in _MISSING_MARKERS
 
 
-async def _record_stated_interest(user_text: str, reply: str) -> None:
+async def _record_stated_interest(
+    user_text: str, reply: str, history: list | None = None
+) -> None:
     """Note an interest the customer expressed, whatever the model chose to do.
 
     Grounded on purpose: structured output makes every field required, so the
@@ -1136,13 +1150,20 @@ async def _record_stated_interest(user_text: str, reply: str) -> None:
     if _interest_owner() is None:
         return  # nobody to attribute it to yet
     try:
+        # The recent conversation, not just this turn. "I also like this one"
+        # names nothing; the album it points at was named a turn or two back,
+        # so an extractor given only the latest exchange answers <UNKNOWN> —
+        # which it did, on exactly this conversation.
+        context = [
+            {"role": m.get("role", "user"), "content": str(m.get("content", ""))[:1500]}
+            for m in (history or [])[-_INTEREST_CONTEXT_TURNS:]
+        ]
         parsed = await interest_llm.ainvoke(
             [
                 {"role": "system", "content": INTEREST_INSTRUCTIONS},
-                # both sides: the name of the thing is usually in what the
-                # agent just said, not in the customer's reply to it
-                {"role": "assistant", "content": reply[-2000:]},
+                *context,
                 {"role": "user", "content": user_text},
+                {"role": "assistant", "content": reply[-1500:]},
             ]
         ) or {}
     except Exception:  # noqa: BLE001 — never fail a turn over a note
@@ -1524,7 +1545,9 @@ async def stream(request, ctx):
     # After the last token, so it costs request duration rather than
     # time-to-answer — the same slot the SDK folds the summary in.
     await _record_stated_interest(
-        request.text, "".join(spoken) or str(final_state.get("followup") or "")
+        request.text,
+        "".join(spoken) or str(final_state.get("followup") or ""),
+        ctx.history,
     )
 
 
