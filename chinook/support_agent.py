@@ -50,7 +50,7 @@ import hopsworks
 from hopsworks_agent_protocol import (  # noqa: E501
     AgentApp,
     AgentError,
-    AgentMemoryService,
+    ManagedMemoryService,
     anthropic_summarizer,
     memory_tools,
     remember,
@@ -1482,7 +1482,7 @@ agent_app = AgentApp(
         "My name is Aaron Mitchell, phone +1 (204) 452-6452 — I'd like a refund.",
     ],
     placeholder="Ask about the catalogue, or request a refund...",
-    memory=AgentMemoryService(
+    memory=ManagedMemoryService(
         summarize=anthropic_summarizer(),
         long_term=True,
     ),

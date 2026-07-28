@@ -35,7 +35,7 @@ from hopsworks_agent_protocol import (  # noqa: E501
     AgentApp,
     AgentError,
     AgentResponse,
-    AgentMemoryService,
+    ManagedMemoryService,
     anthropic_summarizer,
     memory_tools,
 )
@@ -143,7 +143,7 @@ agent_app = AgentApp(
     placeholder="Ask about AI/ML research...",
     # Zero-config connection: project MySQL from the platform-injected MYSQL_*
     # env vars, tables derived from DEPLOYMENT_ID.
-    memory=AgentMemoryService(
+    memory=ManagedMemoryService(
         # Tier 2. Without a summarizer the buffer is a fixed newest-N window and
         # older turns simply stop being visible; with one they are compacted
         # into ctx.summary instead. Runs after the response has streamed, so it
