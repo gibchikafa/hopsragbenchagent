@@ -1040,6 +1040,34 @@ qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
 # returning customer's name and phone number is the whole point of durable
 # memory, and this is the only place they can be registered — the SDK cannot
 # reach into a framework's tool list on your behalf.
+@tool
+def recall_interests() -> str:
+    """What this customer has told you they like or want to buy, from any
+    earlier conversation.
+
+    Use this whenever they ask what they were interested in, what you remember
+    about them, or what they were looking at last time. Takes no arguments:
+    it returns everything stored for them, already checked against what they
+    have since bought.
+
+    This is the only way to read their interests. Do not reach for `search`,
+    which looks through the words of past conversations rather than what was
+    remembered from them.
+    """
+    memory, _ = _memory_and_ctx()
+    identity = _current_identity.get()
+    if memory is None or _interest_owner(identity) is None:
+        return "I don't know who I'm speaking to yet, so I can't look that up."
+    block = interests_block(memory, identity)
+    if not block:
+        return (
+            "Nothing is stored for this customer yet — they have not told you "
+            "about anything they like or want. Say that plainly rather than "
+            "guessing at what they might have meant."
+        )
+    return block
+
+
 qa_graph = create_react_agent(
     qa_llm,
     [
@@ -1049,14 +1077,14 @@ qa_graph = create_react_agent(
         purchase_history,
         place_order,
         remember_interest,
-        # Read tools only. `rebind_subject` made the generic `remember` *safe*
-        # here — `user` scope is the customer now, not the serving key — but
-        # safe is not the same as useful: offering it beside `remember_interest`
-        # gave the model two overlapping ways to store the same kind of fact,
-        # and in practice it stored nothing and said it had. One writer per kind
-        # of fact, and `remember_interest` is it. `search` and `recall` only
-        # read, so they cannot be confused for a way to record something.
-        *memory_tools("langgraph", include=("recall", "search")),
+        recall_interests,
+        # `search` only, of the SDK's memory tools. `remember` is left out
+        # because `remember_interest` is the one writer for this kind of fact,
+        # and `recall` because it looks a value up by exact key — interests are
+        # stored as "likes:<name>", which the model cannot enumerate, so it
+        # guesses a key, misses, and tells the customer there is no record.
+        # `recall_interests` answers that question properly.
+        *memory_tools("langgraph", include=("search",)),
     ],
 )
 
