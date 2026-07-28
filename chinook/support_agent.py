@@ -1082,8 +1082,9 @@ class StatedInterest(TypedDict):
     kind: Literal["wants_to_buy", "likes", "none"]
 
 
-INTEREST_INSTRUCTIONS = """Read the customer's last message and decide whether \
-they expressed interest in a specific album, artist or track.
+INTEREST_INSTRUCTIONS = """Decide whether the customer expressed interest in a \
+specific album, artist or track. You are given what you said to them and their \
+reply.
 
   - "wants_to_buy" — they are interested in it, want it, are thinking about
     buying it, or asked you to remember it for later. This includes "I'm
@@ -1092,13 +1093,35 @@ they expressed interest in a specific album, artist or track.
   - "none" — anything else: browsing, asking what tracks are on an album,
     asking about their orders, requesting a refund, or actually buying.
 
-Set `item` to the name exactly as it appears in the conversation, or null when \
-kind is "none". Do not invent a name and do not guess at one they did not \
-mention."""
+`item` must be the **full name of the thing**, as it appears in the \
+conversation — "Led Zeppelin I", not "the album". Customers refer to things \
+indirectly ("this one", "it", "the album"); resolve that against what you were \
+just discussing and write the real name. If you cannot tell which item they \
+mean, use kind "none" rather than guessing: a note that says "the album" is \
+worse than no note, because it is read back to them later as if it meant \
+something."""
 
 interest_llm = ChatAnthropic(
     model=ROUTER_MODEL, max_tokens=256, temperature=0.0
 ).with_structured_output(StatedInterest)
+
+
+#: Words a customer uses to point at something rather than name it. An item
+#: that is only one of these carries no information: it cannot be looked up,
+#: cannot be matched against the catalogue, and reads as nonsense when the
+#: agent recalls it in a later conversation.
+_VAGUE_ITEMS = frozenset(
+    {
+        "it", "this", "that", "one", "them", "these", "those",
+        "album", "the album", "this album", "that album", "the record",
+        "song", "the song", "this song", "track", "the track", "this track",
+        "artist", "the artist", "this artist", "this one", "that one",
+    }
+)
+
+
+def _is_vague(item: str) -> bool:
+    return item.strip().strip('"\'').lower() in _VAGUE_ITEMS
 
 
 async def _record_stated_interest(user_text: str, reply: str) -> None:
@@ -1116,6 +1139,9 @@ async def _record_stated_interest(user_text: str, reply: str) -> None:
         parsed = await interest_llm.ainvoke(
             [
                 {"role": "system", "content": INTEREST_INSTRUCTIONS},
+                # both sides: the name of the thing is usually in what the
+                # agent just said, not in the customer's reply to it
+                {"role": "assistant", "content": reply[-2000:]},
                 {"role": "user", "content": user_text},
             ]
         ) or {}
@@ -1126,6 +1152,11 @@ async def _record_stated_interest(user_text: str, reply: str) -> None:
     kind = parsed.get("kind")
     item = (parsed.get("item") or "").strip()
     if kind not in ("wants_to_buy", "likes") or not item:
+        return
+    if _is_vague(item):
+        # "the album" is what the customer said, but it is not what they meant,
+        # and a note keyed on it is unreadable next week
+        log.info("Discarding interest %r: refers to something without naming it", item)
         return
     haystack = f"{user_text}\n{reply}".lower()
     if item.lower() not in haystack:
