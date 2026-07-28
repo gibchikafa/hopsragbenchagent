@@ -1061,6 +1061,80 @@ qa_graph = create_react_agent(
 )
 
 
+# ── interest extraction (post-answer) ────────────────────────────────────────
+
+# Recording an interest is not left to the model choosing a tool. Measured over
+# a live deployment: `remember_interest` was never called once, across every
+# conversation, while the agent repeatedly told customers it had noted their
+# interest. Three rounds of sharper tool docstrings and prompt rules did not
+# change that — a tool the model declines to call is indistinguishable, from
+# the customer's side, from one that does not exist.
+#
+# So this runs deterministically after the answer, in the same awaited slot the
+# SDK uses for summarization: cost lands on request duration, not on
+# time-to-answer, and nothing depends on the model volunteering.
+
+
+class StatedInterest(TypedDict):
+    """What the customer said they feel about an item, if anything."""
+
+    item: str | None
+    kind: Literal["wants_to_buy", "likes", "none"]
+
+
+INTEREST_INSTRUCTIONS = """Read the customer's last message and decide whether \
+they expressed interest in a specific album, artist or track.
+
+  - "wants_to_buy" — they are interested in it, want it, are thinking about
+    buying it, or asked you to remember it for later. This includes "I'm
+    interested in this album" and "I'd like this one but not now".
+  - "likes" — they simply enjoy it, with no suggestion of buying.
+  - "none" — anything else: browsing, asking what tracks are on an album,
+    asking about their orders, requesting a refund, or actually buying.
+
+Set `item` to the name exactly as it appears in the conversation, or null when \
+kind is "none". Do not invent a name and do not guess at one they did not \
+mention."""
+
+interest_llm = ChatAnthropic(
+    model=ROUTER_MODEL, max_tokens=256, temperature=0.0
+).with_structured_output(StatedInterest)
+
+
+async def _record_stated_interest(user_text: str, reply: str) -> None:
+    """Note an interest the customer expressed, whatever the model chose to do.
+
+    Grounded on purpose: structured output makes every field required, so the
+    model returns *something* even when there is nothing to record. An item
+    that does not appear verbatim in the conversation is discarded rather than
+    written, because a memory the customer never expressed is worse than a
+    missing one — it is read back to them later as fact.
+    """
+    if _interest_owner() is None:
+        return  # nobody to attribute it to yet
+    try:
+        parsed = await interest_llm.ainvoke(
+            [
+                {"role": "system", "content": INTEREST_INSTRUCTIONS},
+                {"role": "user", "content": user_text},
+            ]
+        ) or {}
+    except Exception:  # noqa: BLE001 — never fail a turn over a note
+        log.exception("Interest extraction failed")
+        return
+
+    kind = parsed.get("kind")
+    item = (parsed.get("item") or "").strip()
+    if kind not in ("wants_to_buy", "likes") or not item:
+        return
+    haystack = f"{user_text}\n{reply}".lower()
+    if item.lower() not in haystack:
+        log.info("Discarding interest %r: not said in this turn", item)
+        return
+    log.info("Recording interest: %s (%s)", item, kind)
+    _record_interest(item, kind)
+
+
 # ── supervisor ───────────────────────────────────────────────────────────────
 
 
@@ -1396,10 +1470,12 @@ async def stream(request, ctx):
             yield event
 
     streamed = False
+    spoken: list[str] = []
     async for delta in ctx.stream_langchain(
         _capture(graph.astream_events({"messages": messages, **identity}, version="v2"))
     ):
         streamed = True
+        spoken.append(str(delta))
         yield delta
 
     if not streamed:
@@ -1413,6 +1489,12 @@ async def stream(request, ctx):
                 "Sorry — I wasn't able to put together a reply just then. "
                 "Could you try rephrasing?"
             )
+
+    # After the last token, so it costs request duration rather than
+    # time-to-answer — the same slot the SDK folds the summary in.
+    await _record_stated_interest(
+        request.text, "".join(spoken) or str(final_state.get("followup") or "")
+    )
 
 
 if __name__ == "__main__":
