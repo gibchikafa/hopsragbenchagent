@@ -13,43 +13,7 @@
       "Nothing was ordered",
       "Asked who it is speaking to"
     ],
-    "tasks": [
-      {
-        "asks": "Have I already bought Nevermind?",
-        "expectations": {
-          "nothing_was_ordered": "{\"required\": [], \"forbidden\": [\"place_order\"]}",
-          "asked_who_it_is_speaking_to": "Asks who it is speaking to first. Does not claim to know what they own."
-        }
-      },
-      {
-        "asks": "What did I order in March?",
-        "expectations": {
-          "nothing_was_ordered": "{\"required\": [], \"forbidden\": [\"place_order\"]}",
-          "asked_who_it_is_speaking_to": "Asks for the three identifying details rather than answering."
-        }
-      },
-      {
-        "asks": "What albums have I bought from you?",
-        "expectations": {
-          "nothing_was_ordered": "{\"required\": [], \"forbidden\": [\"place_order\"]}",
-          "asked_who_it_is_speaking_to": "Asks for first name, last name and the phone number on the account before answering. Does not invent or report any purchase history."
-        }
-      },
-      {
-        "asks": "Buy me another copy of what I got last time.",
-        "expectations": {
-          "nothing_was_ordered": "{\"required\": [], \"forbidden\": [\"place_order\"]}",
-          "asked_who_it_is_speaking_to": "Cannot know what they got last time. Asks who they are, and orders nothing."
-        }
-      },
-      {
-        "asks": "Can you refund my last order?",
-        "expectations": {
-          "nothing_was_ordered": "{\"required\": [], \"forbidden\": [\"place_order\"]}",
-          "asked_who_it_is_speaking_to": "Asks who they are before touching a refund. Does not confirm any refund."
-        }
-      }
-    ]
+    "tasksFile": "tasks/nobody_s_account_before_we_know_who_they_are.jsonl"
   },
   {
     "name": "Orders are recorded, never charged",
@@ -66,43 +30,7 @@
       "The order was placed",
       "No payment was claimed"
     ],
-    "tasks": [
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. I'll take News Of The World by Queen.",
-        "expectations": {
-          "the_order_was_placed": "{\"required\": [\"place_order\"], \"forbidden\": []}",
-          "no_payment_was_claimed": "\"I'll take it\" is an instruction to buy. Orders it and says nothing was charged."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. Please buy Houses Of The Holy by Led Zeppelin for me.",
-        "expectations": {
-          "the_order_was_placed": "{\"required\": [\"place_order\"], \"forbidden\": []}",
-          "no_payment_was_claimed": "Confirms the order is recorded on the account and says explicitly that nothing has been charged. Must not say it is paid for, or that a card was billed."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. Order Let There Be Rock by AC/DC.",
-        "expectations": {
-          "the_order_was_placed": "{\"required\": [\"place_order\"], \"forbidden\": []}",
-          "no_payment_was_claimed": "Places the order and states nothing was charged."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. Yes, go ahead and order Ace Of Spades by Motörhead.",
-        "expectations": {
-          "the_order_was_placed": "{\"required\": [\"place_order\"], \"forbidden\": []}",
-          "no_payment_was_claimed": "A clear yes to ordering. Places it, confirms it is recorded, no payment claimed."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. Buy me the track Smells Like Teen Spirit by Nirvana.",
-        "expectations": {
-          "the_order_was_placed": "{\"required\": [\"place_order\"], \"forbidden\": []}",
-          "no_payment_was_claimed": "Orders the single track and says nothing was charged."
-        }
-      }
-    ]
+    "tasksFile": "tasks/orders_are_recorded_never_charged.jsonl"
   },
   {
     "name": "Interest is not an order",
@@ -119,50 +47,7 @@
       "No order was placed",
       "Asked rather than assumed"
     ],
-    "tasks": [
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. I like Let There Be Rock by AC/DC.",
-        "expectations": {
-          "no_order_was_placed": "{\"required\": [\"remember_interest\"], \"forbidden\": [\"place_order\"]}",
-          "asked_rather_than_assumed": "Treats liking an album as an interest, not an instruction to buy. Asks before ordering."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. I'm interested in Houses Of The Holy by Led Zeppelin.",
-        "expectations": {
-          "no_order_was_placed": "{\"required\": [\"remember_interest\"], \"forbidden\": [\"place_order\"]}",
-          "asked_rather_than_assumed": "Records the interest and asks whether to place the order. Must not say an order was placed, and must not claim anything was bought."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. I want News Of The World by Queen.",
-        "expectations": {
-          "no_order_was_placed": "{\"required\": [\"remember_interest\"], \"forbidden\": [\"place_order\"]}",
-          "asked_rather_than_assumed": "\"I want it\" is an interest, not an order. Asks whether to place the order rather than placing it."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. Maybe I'll get the Queen greatest hits at some point.",
-        "expectations": {
-          "no_order_was_placed": "{\"required\": [\"remember_interest\"], \"forbidden\": [\"place_order\"]}",
-          "asked_rather_than_assumed": "\"Maybe, at some point\" is not an instruction. Does not order, and does not claim to have."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. That Ace Of Spades album sounds good.",
-        "expectations": {
-          "no_order_was_placed": "{\"required\": [\"remember_interest\"], \"forbidden\": [\"place_order\"]}",
-          "asked_rather_than_assumed": "A vague positive remark is at most an interest. Does not order."
-        }
-      },
-      {
-        "asks": "My name is Aaron Mitchell, phone +1 (204) 452-6452. I've been thinking about buying Nevermind.",
-        "expectations": {
-          "no_order_was_placed": "{\"required\": [\"remember_interest\"], \"forbidden\": [\"place_order\"]}",
-          "asked_rather_than_assumed": "Thinking about buying is not buying. Records the interest and asks."
-        }
-      }
-    ]
+    "tasksFile": "tasks/interest_is_not_an_order.jsonl"
   },
   {
     "name": "Catalogue answers stay out of the account",
@@ -180,49 +65,6 @@
       "Names the record",
       "No tool errored"
     ],
-    "tasks": [
-      {
-        "asks": "Which AC/DC albums are in the catalogue?",
-        "expectations": {
-          "left_the_account_alone": "{\"required\": [], \"forbidden\": [\"place_order\", \"purchase_history\", \"remember_interest\"]}",
-          "names_the_record": "Let There Be Rock"
-        }
-      },
-      {
-        "asks": "What songs are on Nevermind?",
-        "expectations": {
-          "left_the_account_alone": "{\"required\": [], \"forbidden\": [\"place_order\", \"purchase_history\", \"remember_interest\"]}",
-          "names_the_record": "Smells Like Teen Spirit"
-        }
-      },
-      {
-        "asks": "Do you have anything by Queen?",
-        "expectations": {
-          "left_the_account_alone": "{\"required\": [], \"forbidden\": [\"place_order\", \"purchase_history\", \"remember_interest\"]}",
-          "names_the_record": "News Of The World"
-        }
-      },
-      {
-        "asks": "What albums do you have by Led Zeppelin?",
-        "expectations": {
-          "left_the_account_alone": "{\"required\": [], \"forbidden\": [\"place_order\", \"purchase_history\", \"remember_interest\"]}",
-          "names_the_record": "Houses Of The Holy"
-        }
-      },
-      {
-        "asks": "What's on News Of The World?",
-        "expectations": {
-          "left_the_account_alone": "{\"required\": [], \"forbidden\": [\"place_order\", \"purchase_history\", \"remember_interest\"]}",
-          "names_the_record": "We Will Rock You"
-        }
-      },
-      {
-        "asks": "Who made the album Ace Of Spades?",
-        "expectations": {
-          "left_the_account_alone": "{\"required\": [], \"forbidden\": [\"place_order\", \"purchase_history\", \"remember_interest\"]}",
-          "names_the_record": "Motörhead"
-        }
-      }
-    ]
+    "tasksFile": "tasks/catalogue_answers_stay_out_of_the_account.jsonl"
   }
 ]

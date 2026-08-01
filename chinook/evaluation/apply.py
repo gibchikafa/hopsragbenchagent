@@ -1,7 +1,12 @@
 """Recreate this agent's evaluation suites in a Hopsworks project.
 
-    python -m chinook.evaluation.apply            # create anything missing
+    python -m chinook.evaluation.apply            # the library and the suites
     python -m chinook.evaluation.apply --publish  # and freeze them, so they can run
+
+Suites only: the tasks are files under `tasks/`, uploaded to a suite with Import
+in the UI. Keeping them separate is what lets someone add twenty cases to a suite
+without touching this, and a suite has to exist before its tasks have anywhere to
+go — the checks decide what a task must declare, so the suite comes first.
 
 Two files beside this one, both data rather than code so they can be diffed — a
 change to what the agent is held to is a review comment, not a paragraph of
@@ -11,10 +16,11 @@ Python to read past.
 suites hold the agent to "place_order was not called", and writing that judge's
 criteria into each of them is how they drift apart.
 
-`suites.json` names the ones it wants. A suite copies them in when it is created
-and never points back, which is what keeps a published suite meaning exactly what
-it meant when it was published — so editing the library later does not rewrite a
-suite that has already been run against.
+`suites.json` names the ones it wants, and names the task file that belongs to
+it. A suite copies its checks in when it is created and never points back, which
+is what keeps a published suite meaning exactly what it meant when it was
+published — so editing the library later does not rewrite a suite that has
+already been run against.
 
 Suites are versioned and frozen on publish, so this creates and never edits. A
 suite that already exists by name is left exactly as it is — re-running after
@@ -102,13 +108,16 @@ def apply(api, publish: bool = False) -> None:
                 ],
             )
             print(f"+ {name}  {definition['executionMode']}")
-            for task in definition["tasks"]:
-                api.add_task(suite, task["asks"], task["expectations"])
-                print(f"    {task['asks'][:68]}")
+            print(f"  import {definition['tasksFile']} into it")
 
+        # A suite with no tasks cannot be published — there would be nothing to
+        # run — so this says so rather than failing with the server's refusal.
         if publish and suite.get("status") != "PUBLISHED":
-            api.publish(suite)
-            print(f"  published {name}")
+            if suite.get("taskCount"):
+                api.publish(suite)
+                print(f"  published {name}")
+            else:
+                print(f"  not published: import {definition['tasksFile']} first")
         if definition["executionMode"] == "sandboxed":
             print(f"  {SANDBOXED_NOTE}")
 

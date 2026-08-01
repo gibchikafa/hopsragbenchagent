@@ -9,14 +9,31 @@ export HOPSWORKS_API_KEY=...
 python -m chinook.evaluation.apply --publish
 ```
 
-Three files:
-
 - **`evaluators.json`** — the library. One named check each, written once.
   Several suites hold the agent to "`place_order` was not called", and writing a
   judge's criteria into each of them separately is how they drift apart.
-- **`suites.json`** — the suites, naming the library entries they use, with their
-  tasks and what each task expects of each check.
+- **`suites.json`** — the suites: which library entries each uses, and which task
+  file belongs to it.
+- **`tasks/*.jsonl`** — the cases, one file per suite, uploaded with **Import**
+  on the suite page.
 - **`apply.py`** — saves the library, then creates any suite that is missing.
+
+`apply.py` creates suites, not tasks. A suite has to exist before its tasks have
+anywhere to go — its checks decide what a task must declare — and keeping the
+cases in files is what lets someone add twenty of them without touching any of
+this.
+
+The task files use the column names the importer already understands:
+
+```json
+{"input": "Do you have anything by Queen?", "expected": "News Of The World",
+ "forbiddenTools": "place_order, purchase_history, remember_interest"}
+```
+
+`expected` goes to the check that reads an answer, `rubric` to the judge, and
+`requiredTools` / `forbiddenTools` to the tool check. A column named after a
+check goes to that one instead, which is what to use if a suite ever has two
+checks of the same shape.
 
 A suite **copies** its checks in when it is created and never points back. That
 is what keeps a published suite meaning exactly what it meant when it was
@@ -27,6 +44,9 @@ once.
 For the same reason `apply.py` creates and never edits a suite. Re-running after
 a change gives you a new version to publish, not a rewrite of the one your last
 results were measured against.
+
+`--publish` freezes a suite only once it has tasks: an empty one has nothing to
+run, and the server refuses it.
 
 ## The four suites
 
