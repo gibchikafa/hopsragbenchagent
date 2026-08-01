@@ -78,7 +78,12 @@ log = logging.getLogger(__name__)
 # called with the same arguments, and every tool returns the same text — because
 # a deployment that behaved differently under evaluation would be measuring
 # something other than the agent that serves customers.
-EVAL_MODE = os.environ.get("HOPSWORKS_EVAL_MODE", "").strip().lower() in (
+# Named EVAL_MODE rather than HOPSWORKS_EVAL_MODE: the platform reserves the
+# HOPS_, HOPSWORKS_, HOPSFS_ and AGENT_ prefixes, so a deployment cannot set
+# either of those and the flag would be unusable. Matches
+# hopsworks_agent_protocol.conventions.EVAL_MODE_ENV, which is what AgentApp
+# reports in the manifest and what the eval runner checks.
+EVAL_MODE = os.environ.get("EVAL_MODE", "").strip().lower() in (
     "1", "true", "yes",
 )
 
