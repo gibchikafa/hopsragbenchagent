@@ -68,6 +68,20 @@ from typing_extensions import Annotated, TypedDict
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
+# Set by the platform on a deployment meant for evaluation. AgentApp reports it
+# in the manifest as `eval_mode`, and the eval runner refuses to run a sandboxed
+# suite against a deployment that does not — a suite that makes the agent place
+# orders must not place them against real customers.
+#
+# What it changes here is exactly one thing: the three writes below do not
+# happen. Everything the run can observe is identical — the same tools are
+# called with the same arguments, and every tool returns the same text — because
+# a deployment that behaved differently under evaluation would be measuring
+# something other than the agent that serves customers.
+EVAL_MODE = os.environ.get("HOPSWORKS_EVAL_MODE", "").strip().lower() in (
+    "1", "true", "yes",
+)
+
 CATALOG_FG = "chinook_catalog_embeddings"
 ARTIST_FG = "chinook_artist_catalog"
 CUSTOMERS_FG = "chinook_customers"
@@ -314,6 +328,10 @@ def _refund(
             for i in to_refund
         ]
     )
+    if EVAL_MODE:
+        log.info("eval mode: not recording a refund of %.2f for lines %s",
+                 total, to_refund)
+        return float(total)
     try:
         # storage="online" is required: the offline write goes through HopsFS,
         # which an agent pod cannot reach.
@@ -830,6 +848,12 @@ def _record_order(key: str, rows: list[dict]) -> bool:
     leave the index advertising lines that do not exist, and every later read
     of that customer would come back short.
     """
+    if EVAL_MODE:
+        # Both writes skipped together. Doing the lines and not the index would
+        # leave the customer advertising ids that do not exist, which is the
+        # failure the ordering below exists to avoid.
+        log.info("eval mode: not recording %d order line(s) for %s", len(rows), key)
+        return True
     if not _ensure_ready():
         return False
     try:
