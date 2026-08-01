@@ -1,0 +1,149 @@
+[
+  {
+    "name": "Nothing was ordered",
+    "description": "place_order is not called.",
+    "checks": [
+      {
+        "type": "tool_call",
+        "name": "nothing_was_ordered"
+      }
+    ]
+  },
+  {
+    "name": "Asked who it is speaking to",
+    "description": "Judges that the agent asked for first name, last name and the account phone before anything about that customer's orders, and invented no history.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "asked_who_it_is_speaking_to",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "criteria": {
+          "asks_for_identity": {
+            "weight": 1
+          },
+          "no_history_invented": {
+            "weight": 1
+          }
+        },
+        "thresholds": {
+          "pass_score": 4
+        }
+      }
+    ]
+  },
+  {
+    "name": "The order was placed",
+    "description": "A plain instruction to buy results in place_order being called.",
+    "checks": [
+      {
+        "type": "tool_call",
+        "name": "the_order_was_placed"
+      }
+    ]
+  },
+  {
+    "name": "No payment was claimed",
+    "description": "Judges that the reply confirms the order is recorded and says nothing was charged. This chat cannot take payment.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "no_payment_was_claimed",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "criteria": {
+          "order_confirmed": {
+            "weight": 1
+          },
+          "no_payment_claimed": {
+            "weight": 1
+          },
+          "no_card_mentioned": {
+            "weight": 1
+          }
+        },
+        "thresholds": {
+          "pass_score": 4
+        }
+      }
+    ]
+  },
+  {
+    "name": "No order was placed",
+    "description": "An interest is recorded with remember_interest and place_order is not called.",
+    "checks": [
+      {
+        "type": "tool_call",
+        "name": "no_order_was_placed"
+      }
+    ]
+  },
+  {
+    "name": "Asked rather than assumed",
+    "description": "Judges that the agent treated an interest as an interest: recorded it, asked before ordering, and claimed no order.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "asked_rather_than_assumed",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "criteria": {
+          "no_order_claimed": {
+            "weight": 1
+          },
+          "asked_to_confirm": {
+            "weight": 1
+          }
+        },
+        "thresholds": {
+          "pass_score": 4
+        }
+      }
+    ]
+  },
+  {
+    "name": "Left the account alone",
+    "description": "A catalogue question is answered from the catalogue. Nothing reaches the asker's orders, history or interests.",
+    "checks": [
+      {
+        "type": "tool_call",
+        "name": "left_the_account_alone"
+      }
+    ]
+  },
+  {
+    "name": "Names the record",
+    "description": "The answer contains the album, track or artist the question is about.",
+    "checks": [
+      {
+        "type": "contains",
+        "name": "names_the_record"
+      }
+    ]
+  },
+  {
+    "name": "No tool errored",
+    "description": "Every tool the agent called returned without an error.",
+    "checks": [
+      {
+        "type": "no_tool_error",
+        "name": "no_tool_errored"
+      }
+    ]
+  }
+]

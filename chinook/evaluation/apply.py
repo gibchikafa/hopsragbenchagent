@@ -3,9 +3,18 @@
     python -m chinook.evaluation.apply            # create anything missing
     python -m chinook.evaluation.apply --publish  # and freeze them, so they can run
 
-`suites.json` beside this file is the definition. It is data rather than code so
-it can be diffed: a suite changing is a review comment, not a paragraph of Python
-to read past.
+Two files beside this one, both data rather than code so they can be diffed — a
+change to what the agent is held to is a review comment, not a paragraph of
+Python to read past.
+
+`evaluators.json` is the library: one named check each, written once. Several
+suites hold the agent to "place_order was not called", and writing that judge's
+criteria into each of them is how they drift apart.
+
+`suites.json` names the ones it wants. A suite copies them in when it is created
+and never points back, which is what keeps a published suite meaning exactly what
+it meant when it was published — so editing the library later does not rewrite a
+suite that has already been run against.
 
 Suites are versioned and frozen on publish, so this creates and never edits. A
 suite that already exists by name is left exactly as it is — re-running after
@@ -32,7 +41,8 @@ import os
 import sys
 from pathlib import Path
 
-DEFINITION = Path(__file__).with_name("suites.json")
+LIBRARY = Path(__file__).with_name("evaluators.json")
+SUITES = Path(__file__).with_name("suites.json")
 
 # Two of these make the agent place orders, so they are sandboxed and the runner
 # refuses them unless the deployment reports eval_mode. That means EVAL_MODE=true
@@ -43,14 +53,29 @@ SANDBOXED_NOTE = (
 )
 
 
-def load() -> list[dict]:
-    return json.loads(DEFINITION.read_text())
+def load() -> tuple[list[dict], list[dict]]:
+    return json.loads(LIBRARY.read_text()), json.loads(SUITES.read_text())
 
 
 def apply(api, publish: bool = False) -> None:
+    library, suites = load()
+
+    # The library first: a suite copies its checks in, so they have to exist as
+    # something to copy. Saving is by name, so re-running updates an entry rather
+    # than making a second one called the same thing.
+    checks_by_name = {}
+    saved = {entry["name"] for entry in api.evaluators()}
+    for entry in library:
+        checks_by_name[entry["name"]] = entry["checks"]
+        if entry["name"] in saved:
+            print(f"= {entry['name']} (library, exists)")
+            continue
+        api.save_evaluator(entry["name"], entry["checks"], entry["description"])
+        print(f"+ {entry['name']} (library)")
+
     existing = {suite["name"]: suite for suite in api.suites()}
 
-    for definition in load():
+    for definition in suites:
         name = definition["name"]
         if name in existing:
             print(f"= {name} (exists, left alone)")
@@ -64,12 +89,16 @@ def apply(api, publish: bool = False) -> None:
                 pass_policy=definition["passPolicy"],
                 pass_threshold=definition["passThreshold"],
                 evaluators=[
+                    # Copied in, not referenced. The suite is the record of what
+                    # a run executed, and a reference would let the library
+                    # change it after the fact.
                     {
-                        "type": check["type"],
-                        "name": check["name"],
-                        "config": json.dumps(check["config"]),
+                        "type": check.pop("type"),
+                        "name": check.pop("name"),
+                        "config": json.dumps(check),
                     }
-                    for check in definition["evaluators"]
+                    for entry_name in definition["evaluators"]
+                    for check in (dict(one) for one in checks_by_name[entry_name])
                 ],
             )
             print(f"+ {name}  {definition['executionMode']}")

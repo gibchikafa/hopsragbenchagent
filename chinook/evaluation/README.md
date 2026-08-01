@@ -9,10 +9,24 @@ export HOPSWORKS_API_KEY=...
 python -m chinook.evaluation.apply --publish
 ```
 
-`suites.json` is the definition; `apply.py` creates anything missing. Suites are
-frozen on publish so a past run can say exactly what it ran, which is why this
-creates and never edits — re-running after a change gives you a new version to
-publish, not a rewrite of the one your last results were measured against.
+Three files:
+
+- **`evaluators.json`** — the library. One named check each, written once.
+  Several suites hold the agent to "`place_order` was not called", and writing a
+  judge's criteria into each of them separately is how they drift apart.
+- **`suites.json`** — the suites, naming the library entries they use, with their
+  tasks and what each task expects of each check.
+- **`apply.py`** — saves the library, then creates any suite that is missing.
+
+A suite **copies** its checks in when it is created and never points back. That
+is what keeps a published suite meaning exactly what it meant when it was
+published: editing the library afterwards cannot rewrite a suite that has already
+been run against. The library is for not retyping, not for editing every suite at
+once.
+
+For the same reason `apply.py` creates and never edits a suite. Re-running after
+a change gives you a new version to publish, not a rewrite of the one your last
+results were measured against.
 
 ## The four suites
 
