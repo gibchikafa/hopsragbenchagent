@@ -145,6 +145,19 @@ def test_all_agents_use_the_same_identity_gate(stubbed):
         assert support_agent.ASK_FOR_IDENTITY == module.ASK_FOR_IDENTITY
 
 
+def test_claude_identity_router_is_not_capped_at_one_turn(stubbed):
+    import support_agent_claude  # noqa: PLC0415
+
+    options = support_agent_claude._base_options(
+        support_agent_claude.IDENTIFY_INSTRUCTIONS,
+        with_tools=False,
+    )
+
+    assert options["max_turns"] == 3
+    assert options["output_format"]["type"] == "json_schema"
+    assert "mcp_servers" not in options
+
+
 def test_all_agents_wire_every_store_tool(stubbed):
     import store  # noqa: PLC0415
     import support_agent  # noqa: PLC0415

@@ -231,6 +231,7 @@ _MCP_SERVER = create_sdk_mcp_server(
     tools=TOOLS,
 )
 _ALLOWED_TOOLS = [f"mcp__chinook__{item.name}" for item in TOOLS]
+_IDENTITY_MAX_TURNS = 3
 
 
 def _conversation_text(messages: list[dict], user_text: str | None = None) -> str:
@@ -277,7 +278,7 @@ def _base_options(system_prompt: str, *, with_tools: bool) -> dict:
                     "type": "json_schema",
                     "schema": _IDENTITY_SCHEMA,
                 },
-                "max_turns": 1,
+                "max_turns": _IDENTITY_MAX_TURNS,
             }
         )
     return options
