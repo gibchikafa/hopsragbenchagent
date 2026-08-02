@@ -39,9 +39,13 @@ from llama_index.core.agent.workflow import FunctionAgent
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.anthropic import Anthropic
 
-from hopsworks_agent_protocol import AgentApp, AgentError
-from hopsworks_agent_protocol.memory import ManagedMemoryService, anthropic_summarizer
-from hopsworks_agent_protocol.tools import memory_tools
+from hopsworks_agent_protocol import (
+    AgentApp,
+    AgentError,
+    ManagedMemoryService,
+    anthropic_summarizer,
+    memory_tools,
+)
 
 from store import (
     ANSWER_MODEL,

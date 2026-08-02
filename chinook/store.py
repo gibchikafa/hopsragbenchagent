@@ -19,19 +19,15 @@ import json
 import logging
 import os
 import random
-import re
-from datetime import datetime, timezone
 from typing import Literal
 
 import hopsworks
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 
-from hopsworks_agent_protocol import AgentError
 
 log = logging.getLogger(__name__)
 
-from typing_extensions import Annotated, TypedDict
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -874,7 +870,6 @@ def _purchased_albums(identity: dict) -> list[dict]:
     return result if isinstance(result, list) else []
 
 
-qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
 # The memory tools go in the same list: a support agent that remembers a
 # returning customer's name and phone number is the whole point of durable
 # memory, and this is the only place they can be registered — the SDK cannot

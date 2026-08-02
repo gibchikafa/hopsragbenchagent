@@ -35,18 +35,11 @@ Deploy:
     hops agent start chinooksupport --wait 600
 """
 
-import contextvars
-import hashlib
-import random
 import json
-import logging
-import os
 import re
 from typing import Literal
 
-import pandas as pd
 
-import hopsworks
 from hopsworks_agent_protocol import (  # noqa: E501
     AgentApp,
     AgentError,
@@ -55,30 +48,33 @@ from hopsworks_agent_protocol import (  # noqa: E501
     memory_tools,
     remember,
 )
+from typing_extensions import Annotated, TypedDict
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.tools import tool
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.prebuilt import create_react_agent
 from langgraph.types import Command
-from sentence_transformers import SentenceTransformer
 from tabulate import tabulate
 # The store and every tool, shared with support_agent_llamaindex.py. Wrapped
 # below as LangChain tools; the LlamaIndex agent wraps the same functions as
 # FunctionTools, so the rules live in one place rather than two.
 from store import (  # noqa: F401 — re-exported for the graph and the app below
     ANSWER_MODEL,
-    EVAL_MODE,
+    CUSTOMERS_FG,
     IDENTITY_KEYS,
     IDENTITY_SCOPE,
     ROUTER_MODEL,
     _current_identity,
+    _interest_owner,
     _lookup,
+    _lookup_one,
     _rebind_to_customer,
+    _record_interest,
     _refund,
-    _refunded_line_ids,
-    artist_catalog,
     interests_block,
+    log,
     lookup_album,
     lookup_artist,
     lookup_track,
@@ -86,7 +82,6 @@ from store import (  # noqa: F401 — re-exported for the graph and the app belo
     purchase_history,
     recall_interests,
     remember_interest,
-    resolve_name,
 )
 
 # Wrapped here rather than in store.py: the same function is a LangChain tool for
@@ -254,6 +249,10 @@ refund_graph = _refund_builder.compile()
 # ── question-answering sub-agent ─────────────────────────────────────────────
 
 
+
+# The answering model. Here rather than in store.py: it is a LangChain client,
+# and the store is what both agents share.
+qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
 
 qa_graph = create_react_agent(
     qa_llm,
