@@ -25,6 +25,7 @@ TOOLS = (
 )
 
 STUBBED = (
+    "hopsworks_agent_protocol",
     "hopsworks", "pandas", "sentence_transformers", "tabulate", "anthropic",
     "langchain_anthropic", "langchain_core", "langchain_core.tools",
     "langgraph", "langgraph.graph", "langgraph.graph.message",
@@ -100,6 +101,16 @@ def test_both_agents_wire_every_store_tool(stubbed):
         assert getattr(support_agent, name, None) is not None, name
         assert getattr(store, name) is not None, name
     assert len(support_agent_llamaindex.TOOLS) >= len(TOOLS)
+
+
+@pytest.mark.parametrize("name", ("support_agent.py", "support_agent_llamaindex.py"))
+def test_agent_files_start_uvicorn_when_executed_as_scripts(name):
+    """The serving platform runs the selected agent file with Python directly."""
+    from pathlib import Path
+
+    source = (Path(__file__).parent / name).read_text()
+    assert 'if __name__ == "__main__":' in source
+    assert "uvicorn.run(agent_app" in source
 
 
 def test_no_undefined_names_in_any_of_the_three(stubbed):

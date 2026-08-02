@@ -212,3 +212,9 @@ async def stream(request, ctx):
         text = str(getattr(response, "response", response) or "").strip()
         if text:
             yield text
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(agent_app, host="0.0.0.0", port=8080)
