@@ -138,3 +138,31 @@ hops agent start chinooksupport --wait 600
 | `CHINOOK_DB_PATH` | `chinook.db` | Source SQLite file — **migration scripts only**; the agent never reads it |
 | `CHINOOK_ROUTER_MODEL` | `claude-haiku-4-5` | Intent routing + purchase-info extraction |
 | `CHINOOK_ANSWER_MODEL` | `claude-haiku-4-5` | Catalogue question answering |
+
+## Two agents, one store
+
+| file | framework | entrypoint |
+|---|---|---|
+| `support_agent.py` | LangGraph supervisor | `chinook/support_agent.py` |
+| `support_agent_llamaindex.py` | LlamaIndex `FunctionAgent` | `chinook/support_agent_llamaindex.py` |
+
+Both import the store and all seven tools from `store.py`, and use a byte-identical
+system prompt. That is deliberate: an evaluation suite written against one should
+hold against the other, so a difference in results is a difference in the
+framework rather than in what the agent was told to do.
+
+They differ in wiring only. The LangGraph agent routes through sub-agents — one
+to identify the customer, one to answer, one to refund; the LlamaIndex one gives
+a single agent all seven tools. The rules that matter are enforced in the tools
+either way:
+
+- `purchase_history` and `place_order` refuse without a first name, last name and
+  the phone on the account, whoever asks them
+- `place_order` records an interest instead of an order unless it is told the
+  customer said to buy
+
+A rule that only holds because a supervisor routed correctly is a rule that holds
+until the routing changes, which is why they are in the tools.
+
+Deploy either by pointing a deployment's entrypoint at that file. The suites in
+`evaluation/` apply to both.
