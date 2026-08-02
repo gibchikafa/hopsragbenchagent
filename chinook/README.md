@@ -16,7 +16,10 @@ intent_classifier ─┬─▶ refund_agent               (gather_info → looku
 |---|---|
 | `feature_pipeline.py` | Embeds every artist/album/track name into an embedding feature group (fuzzy name → canonical name) |
 | `migrate_to_feature_store.py` | One-off migration of Chinook out of SQLite into keyed feature groups |
-| `support_agent.py` | The agent, served by `AgentApp` |
+| `support_agent.py` | LangGraph support agent, served by `AgentApp` |
+| `support_agent_llamaindex.py` | LlamaIndex support agent, served by `AgentApp` |
+| `support_agent_openai.py` | OpenAI Agents SDK support agent, served by `AgentApp` |
+| `support_agent_claude.py` | Claude Agent SDK support agent, served by `AgentApp` |
 | `requirements.txt` | Deployment requirements |
 
 ### Feature groups
@@ -138,23 +141,30 @@ hops agent start chinooksupport --wait 600
 | `CHINOOK_DB_PATH` | `chinook.db` | Source SQLite file — **migration scripts only**; the agent never reads it |
 | `CHINOOK_ROUTER_MODEL` | `claude-haiku-4-5` | Intent routing + purchase-info extraction |
 | `CHINOOK_ANSWER_MODEL` | `claude-haiku-4-5` | Catalogue question answering |
+| `CHINOOK_OPENAI_ROUTER_MODEL` | OpenAI Agents SDK default | OpenAI identity extraction |
+| `CHINOOK_OPENAI_ANSWER_MODEL` | OpenAI Agents SDK default | OpenAI catalogue/refund answering |
+| `CHINOOK_CLAUDE_ROUTER_MODEL` | `CHINOOK_ANSWER_MODEL` | Claude Agent SDK identity extraction |
+| `CHINOOK_CLAUDE_ANSWER_MODEL` | `CHINOOK_ANSWER_MODEL` | Claude Agent SDK catalogue/refund answering |
 
-## Two agents, one store
+## Four agents, one store
 
 | file | framework | entrypoint |
 |---|---|---|
 | `support_agent.py` | LangGraph supervisor | `chinook/support_agent.py` |
 | `support_agent_llamaindex.py` | LlamaIndex `FunctionAgent` | `chinook/support_agent_llamaindex.py` |
+| `support_agent_openai.py` | OpenAI Agents SDK `Agent` | `chinook/support_agent_openai.py` |
+| `support_agent_claude.py` | Claude Agent SDK + in-process MCP tools | `chinook/support_agent_claude.py` |
 
-Both import the store and all seven tools from `store.py`, and use a byte-identical
+All four import the store and all seven tools from `store.py`, and use a byte-identical
 system prompt. That is deliberate: an evaluation suite written against one should
-hold against the other, so a difference in results is a difference in the
+hold against the others, so a difference in results is a difference in the
 framework rather than in what the agent was told to do.
 
 They differ in wiring only. The LangGraph agent routes through sub-agents — one
-to identify the customer, one to answer, one to refund; the LlamaIndex one gives
-a single agent all seven tools. The rules that matter are enforced in the tools
-either way:
+to identify the customer, one to answer, one to refund; the LlamaIndex and
+OpenAI entrypoints give a single agent all seven tools; the Claude entrypoint
+exposes those tools through an in-process MCP server. The rules that matter are
+enforced in the tools either way:
 
 - `purchase_history` and `place_order` refuse without a first name, last name and
   the phone on the account, whoever asks them
@@ -164,5 +174,5 @@ either way:
 A rule that only holds because a supervisor routed correctly is a rule that holds
 until the routing changes, which is why they are in the tools.
 
-Deploy either by pointing a deployment's entrypoint at that file. The suites in
-`evaluation/` apply to both.
+Deploy any one by pointing a deployment's entrypoint at that file. The suites in
+`evaluation/` apply to all four.

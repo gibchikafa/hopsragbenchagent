@@ -1,12 +1,11 @@
 """The store, and everything an agent can do to it.
 
-Framework-agnostic on purpose. `support_agent.py` wraps these as LangChain tools
-for a LangGraph supervisor and `support_agent_llamaindex.py` wraps the same
-functions as LlamaIndex FunctionTools — two agents over one implementation,
-because the interesting rules live here and a second copy of them is a second
-set of rules.
+Framework-agnostic on purpose. The LangGraph, LlamaIndex, OpenAI Agents and
+Claude Agent SDK entrypoints wrap these same functions in their framework's
+tool type, because the interesting rules live here and a second copy of them is
+a second set of rules.
 
-The docstrings are load-bearing: both frameworks read them as the tool
+The docstrings are load-bearing: the frameworks read them as the tool
 description the model chooses on, so they are written for the model rather than
 for a reader of this file.
 """

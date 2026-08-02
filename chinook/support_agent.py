@@ -57,9 +57,9 @@ from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.prebuilt import create_react_agent
 from langgraph.types import Command
 from tabulate import tabulate
-# The store and every tool, shared with support_agent_llamaindex.py. Wrapped
-# below as LangChain tools; the LlamaIndex agent wraps the same functions as
-# FunctionTools, so the rules live in one place rather than two.
+# The store and every tool, shared with the other framework entrypoints. Wrapped
+# below as LangChain tools; the other agents wrap the same functions in their
+# own tool type, so the rules live in one place rather than several.
 from store import (  # noqa: F401 — re-exported for the graph and the app below
     ANSWER_MODEL,
     CUSTOMERS_FG,
@@ -84,9 +84,9 @@ from store import (  # noqa: F401 — re-exported for the graph and the app belo
     remember_interest,
 )
 
-# Wrapped here rather than in store.py: the same function is a LangChain tool for
-# this agent and a LlamaIndex FunctionTool for the other, and a decorator in the
-# shared module would make it one framework's object for both.
+# Wrapped here rather than in store.py: each entrypoint needs a framework-native
+# tool object, and a decorator in the shared module would make it one framework's
+# object for all.
 lookup_track = tool(lookup_track)
 lookup_album = tool(lookup_album)
 lookup_artist = tool(lookup_artist)
@@ -251,7 +251,7 @@ refund_graph = _refund_builder.compile()
 
 
 # The answering model. Here rather than in store.py: it is a LangChain client,
-# and the store is what both agents share.
+# and the store is what every entrypoint shares.
 qa_llm = ChatAnthropic(model=ANSWER_MODEL, max_tokens=1024, temperature=0.0)
 
 qa_graph = create_react_agent(

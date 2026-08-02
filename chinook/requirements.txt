@@ -11,11 +11,14 @@ openinference-instrumentation-langchain>=0.1.0
 sentence-transformers>=3.0.0
 opentelemetry-sdk>=1.0.0
 opentelemetry-exporter-otlp-proto-http>=1.0.0
-hopsworks-agent-protocol[langgraph,llamaindex] @ git+https://github.com/gibchikafa/hopsworks-agent-protocol.git
+hopsworks-agent-protocol[langgraph,llamaindex,openai-agents,claude-agents] @ git+https://github.com/gibchikafa/hopsworks-agent-protocol.git
 
-# The LlamaIndex agent (support_agent_llamaindex.py). The LangGraph one needs
-# none of these and vice versa; both are listed because one image serves either
-# entrypoint, and a deployment picks which file to run.
+# The non-LangGraph agents. One image serves any entrypoint, and a deployment
+# picks which file to run.
 llama-index-core>=0.12
 llama-index-llms-anthropic>=0.6
 openinference-instrumentation-llama-index>=2.0.0
+openai-agents>=0.18.3
+openinference-instrumentation-openai-agents>=1.5.0
+claude-agent-sdk>=0.2.123
+openinference-instrumentation-claude-agent-sdk>=0.1.3
