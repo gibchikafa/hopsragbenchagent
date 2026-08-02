@@ -11,8 +11,6 @@ description the model chooses on, so they are written for the model rather than
 for a reader of this file.
 """
 
-from __future__ import annotations
-
 import contextvars
 import hashlib
 import json

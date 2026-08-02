@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import sys
 import types
+from inspect import Signature, signature
 from unittest import mock
 
 import pytest
@@ -101,6 +102,20 @@ def test_both_agents_wire_every_store_tool(stubbed):
         assert getattr(support_agent, name, None) is not None, name
         assert getattr(store, name) is not None, name
     assert len(support_agent_llamaindex.TOOLS) >= len(TOOLS)
+
+
+def test_store_tool_annotations_are_concrete_for_llamaindex(stubbed):
+    """LlamaIndex builds Pydantic schemas from inspect.signature directly."""
+    import store  # noqa: PLC0415
+
+    for name in TOOLS:
+        for param in signature(getattr(store, name)).parameters.values():
+            if param.annotation is Signature.empty:
+                continue
+            assert not isinstance(param.annotation, str), (
+                f"{name}.{param.name} annotation must be a real type, not a "
+                "postponed string"
+            )
 
 
 @pytest.mark.parametrize("name", ("support_agent.py", "support_agent_llamaindex.py"))
