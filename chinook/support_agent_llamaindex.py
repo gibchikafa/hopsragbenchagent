@@ -34,10 +34,13 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
+from langchain_anthropic import ChatAnthropic
 from llama_index.core.agent.workflow import FunctionAgent
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.anthropic import Anthropic
+from typing_extensions import TypedDict
 
 from hopsworks_agent_protocol import (
     AgentApp,
@@ -45,13 +48,17 @@ from hopsworks_agent_protocol import (
     ManagedMemoryService,
     anthropic_summarizer,
     memory_tools,
+    remember,
 )
 
 from store import (
     ANSWER_MODEL,
+    CUSTOMERS_FG,
     IDENTITY_KEYS,
     IDENTITY_SCOPE,
+    ROUTER_MODEL,
     _current_identity,
+    _lookup_one,
     _rebind_to_customer,
     interests_block,
     lookup_album,
@@ -128,6 +135,98 @@ TOOLS = [
 _llm = Anthropic(model=os.environ.get("CHINOOK_ANSWER_MODEL", ANSWER_MODEL))
 
 
+IDENTIFY_INSTRUCTIONS = """You are the front desk of an online music store. Your only \
+job right now is to work out who you are speaking to. From the conversation so far, \
+extract the customer's first name, last name, and the phone number on their account. \
+If instead they gave a customer key — a long string of letters and digits — put that \
+in customer_key and leave the other fields null; it identifies them on its own. \
+Do not guess or invent any of them — leave a field null if the customer has not said \
+it. Do not answer any other question yet."""
+
+
+class CustomerIdentity(TypedDict):
+    """Who the customer is. Leave a field null when they have not said it."""
+
+    customer_first_name: str | None
+    customer_last_name: str | None
+    customer_phone: str | None
+    # An alternative to the three fields above, not an addition: the primary key
+    # of the customers feature group, which resolves to all three.
+    customer_key: str | None
+
+
+identity_llm = ChatAnthropic(
+    model=ROUTER_MODEL, max_tokens=512, temperature=0.0
+).with_structured_output(CustomerIdentity)
+
+ASK_FOR_IDENTITY = (
+    "Before we start — could you give me your first name, last name, and the "
+    "phone number on your account? If you have your customer key to hand, that "
+    "works on its own. I'll keep them for the rest of this chat."
+)
+
+
+_MISSING_MARKERS = {
+    "", "none", "null", "n/a", "na", "unknown", "not provided",
+    "not specified", "string",
+}
+
+
+def _clean_identity(parsed: dict) -> dict:
+    """Drop values the model filled in rather than read."""
+    cleaned = {}
+    for key in IDENTITY_KEYS:
+        value = parsed.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text.lower() in _MISSING_MARKERS:
+            continue
+        if key == "customer_phone" and sum(c.isdigit() for c in text) < 7:
+            continue
+        cleaned[key] = text
+    return cleaned
+
+
+_KEY_RE = re.compile(r"^[0-9a-f]{24}$")
+
+
+def _identity_from_key(parsed: dict) -> dict:
+    """Resolve a customer key the customer quoted back into name and phone."""
+    raw = parsed.get("customer_key")
+    if raw is None:
+        return {}
+    key = str(raw).strip().lower()
+    if key in _MISSING_MARKERS or not _KEY_RE.match(key):
+        return {}
+    row = _lookup_one(CUSTOMERS_FG, {"customer_key": key})
+    if not row:
+        log.info("Customer key %r matched no customer", key)
+        return {}
+    resolved = {
+        "customer_first_name": row.get("first_name"),
+        "customer_last_name": row.get("last_name"),
+        "customer_phone": row.get("phone"),
+    }
+    if not all(resolved.values()):
+        return {}
+    return {k: str(v) for k, v in resolved.items()}
+
+
+async def _identify_from_turn(messages: list[dict]) -> dict:
+    extracted = (
+        await identity_llm.ainvoke(
+            [{"role": "system", "content": IDENTIFY_INSTRUCTIONS}, *messages]
+        )
+        or {}
+    )
+    parsed = _clean_identity(extracted)
+    if not all(parsed.get(key) for key in IDENTITY_KEYS):
+        # A quoted customer key stands in for all three fields.
+        parsed = _identity_from_key(extracted) or parsed
+    return parsed
+
+
 def _agent(system_prompt: str) -> FunctionAgent:
     """A fresh agent per turn, carrying this turn's system prompt.
 
@@ -175,6 +274,24 @@ async def stream(request, ctx):
     # one; a new conversation asks again.
     known = ctx.state(IDENTITY_SCOPE)
     identity = {key: known[key] for key in IDENTITY_KEYS if known.get(key)}
+    if not all(identity.get(key) for key in IDENTITY_KEYS):
+        parsed = {
+            **identity,
+            **await _identify_from_turn(
+                [
+                    *ctx.history,
+                    {"role": "user", "content": request.text},
+                ]
+            ),
+        }
+        if not all(parsed.get(key) for key in IDENTITY_KEYS):
+            yield ASK_FOR_IDENTITY
+            return
+        identity = {key: str(parsed[key]) for key in IDENTITY_KEYS}
+        _rebind_to_customer(identity)
+        for key in IDENTITY_KEYS:
+            remember(key, str(identity[key]), scope=IDENTITY_SCOPE)
+
     # Published for the tools, which the model calls without any of this in scope.
     _current_identity.set(identity)
     # Before ctx.system_context(), which reads `user` scope keyed on the subject:

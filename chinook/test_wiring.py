@@ -93,6 +93,17 @@ def test_both_agents_use_the_same_system_prompt(stubbed):
     assert support_agent.SYSTEM_PROMPT == support_agent_llamaindex.SYSTEM_PROMPT
 
 
+def test_both_agents_use_the_same_identity_gate(stubbed):
+    import support_agent  # noqa: PLC0415
+    import support_agent_llamaindex  # noqa: PLC0415
+
+    assert (
+        support_agent.IDENTIFY_INSTRUCTIONS
+        == support_agent_llamaindex.IDENTIFY_INSTRUCTIONS
+    )
+    assert support_agent.ASK_FOR_IDENTITY == support_agent_llamaindex.ASK_FOR_IDENTITY
+
+
 def test_both_agents_wire_every_store_tool(stubbed):
     import store  # noqa: PLC0415
     import support_agent  # noqa: PLC0415
