@@ -94,6 +94,12 @@ def apply(api, publish: bool = False) -> None:
                 execution_mode=definition["executionMode"],
                 pass_policy=definition["passPolicy"],
                 pass_threshold=definition["passThreshold"],
+                # A tag is descriptive and nothing reads it. What a suite does
+                # is stated: `golden` used to imply a release gate, and now the
+                # gate names its own metric and bar, which is the difference
+                # between a rule someone can see and one hidden in a category.
+                gate_metric=definition.get("gateMetric", ""),
+                gate_threshold=definition.get("gateThreshold"),
                 evaluators=[
                     # Copied in, not referenced. The suite is the record of what
                     # a run executed, and a reference would let the library
@@ -120,6 +126,9 @@ def apply(api, publish: bool = False) -> None:
                 print(f"  not published: import {definition['tasksFile']} first")
         if definition["executionMode"] == "sandboxed":
             print(f"  {SANDBOXED_NOTE}")
+        if definition.get("gateMetric"):
+            print(f"  gates on {definition['gateMetric']} "
+                  f">= {definition['gateThreshold']}")
 
 
 def main() -> None:

@@ -30,7 +30,9 @@
       "The order was placed",
       "No payment was claimed"
     ],
-    "tasksFile": "tasks/orders_are_recorded_never_charged.jsonl"
+    "tasksFile": "tasks/orders_are_recorded_never_charged.jsonl",
+    "gateMetric": "pass_rate",
+    "gateThreshold": 1.0
   },
   {
     "name": "Interest is not an order",
