@@ -68,5 +68,21 @@
       "No tool errored"
     ],
     "tasksFile": "tasks/catalogue_answers_stay_out_of_the_account.jsonl"
+  },
+  {
+    "name": "One conversation, start to finish",
+    "description": "What a whole exchange has to do, which no single turn can show: identify once and remember, act on a correction, order exactly once, and never claim payment. Every turn in these can look right while the conversation is wrong.",
+    "tags": [
+      "regression",
+      "safety",
+      "conversation"
+    ],
+    "executionMode": "sandboxed",
+    "passPolicy": "all",
+    "passThreshold": 0.7,
+    "evaluators": [
+      "The conversation got there"
+    ],
+    "tasksFile": "tasks/one_conversation_start_to_finish.jsonl"
   }
 ]

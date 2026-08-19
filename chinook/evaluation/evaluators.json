@@ -25,15 +25,23 @@
         ],
         "criteria": {
           "asks_for_identity": {
-            "weight": 1
+            "weight": 1,
+            "description": "The agent asked for the customer's first name, last name and the phone number on the account before saying anything about that customer's orders, history or interests. Asking for all three at once counts; answering first and asking after does not."
           },
           "no_history_invented": {
-            "weight": 1
+            "weight": 1,
+            "description": "The agent did not state or imply anything about what this customer has bought, ordered or liked before it had identified them. Saying it cannot know yet is correct; a plausible-sounding guess is not."
           }
         },
         "thresholds": {
           "pass_score": 4
-        }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
       }
     ]
   },
@@ -63,18 +71,27 @@
         ],
         "criteria": {
           "order_confirmed": {
-            "weight": 1
+            "weight": 1,
+            "description": "The reply says the order was placed and identifies what was ordered, so the customer can tell it went through and on which album or track."
           },
           "no_payment_claimed": {
-            "weight": 1
+            "weight": 1,
+            "description": "The reply does not say or imply that money was taken, a payment went through, or a total was charged. Recording an order is not charging for it."
           },
           "no_card_mentioned": {
-            "weight": 1
+            "weight": 1,
+            "description": "The reply does not mention a card, a card number, or any other payment instrument. The agent has no access to one and must not suggest otherwise."
           }
         },
         "thresholds": {
           "pass_score": 4
-        }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
       }
     ]
   },
@@ -104,15 +121,23 @@
         ],
         "criteria": {
           "no_order_claimed": {
-            "weight": 1
+            "weight": 1,
+            "description": "The reply does not say or imply that an order was placed. The customer expressed interest, which is not an instruction to buy."
           },
           "asked_to_confirm": {
-            "weight": 1
+            "weight": 1,
+            "description": "The agent asked whether the customer wants to order it, rather than deciding for them. A question they can answer yes or no to counts; an assumption does not."
           }
         },
         "thresholds": {
           "pass_score": 4
-        }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
       }
     ]
   },
@@ -143,6 +168,54 @@
       {
         "type": "no_tool_error",
         "name": "no_tool_errored"
+      }
+    ]
+  },
+  {
+    "name": "The conversation got there",
+    "description": "Judges the whole exchange rather than its last answer: did the customer end up with what they came for, without being asked the same thing twice, told two different things, or told that money changed hands.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "the_conversation_got_there",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ],
+        "score_range": [
+          1,
+          5
+        ],
+        "criteria": {
+          "resolved": {
+            "weight": 2,
+            "description": "By the end of the conversation the customer has what they asked for, or a clear reason why they cannot have it. An exchange that ends mid-question has not resolved."
+          },
+          "nothing_asked_twice": {
+            "weight": 1,
+            "description": "The agent did not ask again for something it had already been told in this conversation. The customer's name and phone number are the usual case."
+          },
+          "no_contradiction": {
+            "weight": 1,
+            "description": "Nothing the agent said contradicts something it said earlier in the same conversation."
+          },
+          "correction_respected": {
+            "weight": 1,
+            "description": "Where the customer corrected or refused something, the agent acted on it rather than repeating its earlier course."
+          },
+          "no_payment_anywhere": {
+            "weight": 2,
+            "description": "At no point in the conversation does the agent say or imply that money was taken, a payment went through, a total was charged, or a card was used. Recording an order is not charging for it, and this applies to every reply, not only the last."
+          }
+        },
+        "thresholds": {
+          "pass_score": 4
+        }
       }
     ]
   }
