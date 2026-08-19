@@ -21,11 +21,21 @@ Run once before starting the agent:
 import logging
 import os
 import sqlite3
+import tempfile
 import urllib.request
 
 import hopsworks
 import pandas as pd
 from hsfs.embedding import EmbeddingIndex, SimilarityFunctionType
+
+HF_CACHE_DIR = (
+    os.environ.get("SENTENCE_TRANSFORMERS_HOME")
+    or os.environ.get("HF_HOME")
+    or os.path.join(tempfile.gettempdir(), "huggingface")
+)
+os.environ.setdefault("HF_HOME", HF_CACHE_DIR)
+os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", HF_CACHE_DIR)
+
 from sentence_transformers import SentenceTransformer
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -81,8 +91,9 @@ def main() -> None:
     db_path = ensure_chinook_db()
     frame = read_catalogue(db_path)
     log.info("Embedding %d catalogue entries …", len(frame))
+    log.info("Using Hugging Face cache at %s", HF_CACHE_DIR)
 
-    model = SentenceTransformer(EMBEDDING_MODEL)
+    model = SentenceTransformer(EMBEDDING_MODEL, cache_folder=HF_CACHE_DIR)
     vectors = model.encode(
         frame["name"].tolist(),
         batch_size=BATCH_SIZE,
