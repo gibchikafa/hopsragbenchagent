@@ -24,28 +24,34 @@ with the same checks on every task; the other is one judge's opinion on whatever
 arrived. Both are useful; one average of the two is useful for nothing.
 
 ```bash
-export HOPSWORKS_API_KEY=...
-python -m chinook.evaluation.apply --publish          # offline: the suites
+export HOPSWORKS_HOST=https://...  HOPSWORKS_API_KEY=...
+python -m chinook.evaluation.apply                    # offline: library, suites, tasks
+python -m chinook.evaluation.apply --publish          # ...and freeze them, so they can run
 python -m chinook.evaluation.sample --deployment-id 12  # online: real traffic
 ```
+
+Run from the repository root, since it is a module under `chinook`. `--insecure`
+skips TLS verification for a dev cluster whose ingress serves a certificate
+nothing trusts; `--project-id` names the project when there is no `hopsworks`
+client around to log in with.
 
 - **`evaluators.json`** — the library. One named check each, written once.
   Several suites hold the agent to "`place_order` was not called", and writing a
   judge's criteria into each of them separately is how they drift apart.
 - **`suites.json`** — the suites: which library entries each uses, and which task
   file belongs to it.
-- **`tasks/*.jsonl`** — the cases, one file per suite, uploaded with **Import**
-  on the suite page.
-- **`apply.py`** — saves the library, then creates any suite that is missing.
+- **`tasks/*.jsonl`** — the cases, one file per suite. `apply.py` imports them;
+  **Import** on the suite page reads the same files, for adding a case by hand.
+- **`apply.py`** — saves the library, creates any suite that is missing, and
+  gives each draft suite the cases from its file that it does not already hold.
 - **`rubric.md`** — what a good answer looks like, for grading real traffic. The
   only input online evaluation has, since production carries no expected
   answers.
 - **`sample.py`** — starts one online sample against a deployment.
 
-`apply.py` creates suites, not tasks. A suite has to exist before its tasks have
-anywhere to go — its checks decide what a task must declare — and keeping the
-cases in files is what lets someone add twenty of them without touching any of
-this.
+The suite comes before its tasks because its checks decide what a task must
+declare, and keeping the cases in files is what lets someone add twenty of them
+without touching any code: append to the file and re-run.
 
 The task files use the column names the importer already understands:
 
@@ -67,7 +73,9 @@ once.
 
 For the same reason `apply.py` creates and never edits a suite. Re-running after
 a change gives you a new version to publish, not a rewrite of the one your last
-results were measured against.
+results were measured against. A published suite gets no tasks from its file
+either; the server would refuse them, and the file is the record of what the
+next version should hold.
 
 `--publish` freezes a suite only once it has tasks: an empty one has nothing to
 run, and the server refuses it.
@@ -105,25 +113,38 @@ database rather than remembered. Aaron Mitchell and `+1 (204) 452-6452` are a
 real customer and the phone on their account, so the identity gate genuinely
 opens. A failure means the agent was wrong, not that the test was.
 
-## The two sandboxed suites
+## The three sandboxed suites
 
 They make the agent call `place_order`, which writes against a real customer's
-account. The runner refuses a sandboxed suite unless the deployment reports
-`eval_mode`, so they need a deployment with:
+account. The runner refuses a sandboxed suite unless the deployment declares
+one of two things in its manifest.
+
+**`eval_per_request`** — what the four agents here declare. The runner marks
+every trial in the request's W3C `baggage` (`hopsworks.eval.run_id` and
+friends); the SDK verifies with Hopsworks that the run exists and targets this
+deployment, then makes `in_evaluation()` true for that turn. `store.py` asks it
+before each of the three writes — order lines, the customer's line index, the
+refund ledger — and skips them. A customer's turn, which carries no baggage,
+writes as usual, so one deployment serves customers and is evaluated at once.
+A trial whose run cannot be verified is refused with a 403 rather than run,
+so a forged header can neither reach production nor make the agent claim an
+order it did not record.
+
+**`eval_mode`** — the whole deployment is an evaluation, set with
 
 ```
 EVAL_MODE=true
 ```
 
-`AgentApp` reads that and reports it in the manifest;
-[`support_agent.py`](../support_agent.py) reads it too and skips the three
-writes — order lines, the customer's line index, the refund ledger. Everything
-else is identical, because a deployment that behaved differently under
-evaluation would be measuring something other than the agent that serves
-customers.
+on a deployment that exists only to be evaluated. It wins over everything: no
+baggage is needed and nothing is verified. Use it for a scratch deployment, or
+when the agent's tools cannot be trusted to ask per turn.
 
-Setting the variable without that code would make the manifest claim something
-untrue and place real orders.
+Either way, everything the run observes is identical — the same tools, called
+with the same arguments, returning the same text — because an agent that
+behaved differently under evaluation would be measuring something other than
+the one that serves customers. Declaring either without the code in `store.py`
+would make the manifest claim something untrue and place real orders.
 
 ## Gates
 
