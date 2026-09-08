@@ -855,7 +855,9 @@ def _purchased_albums(identity: dict) -> list[dict]:
     previous = _current_identity.get()
     _current_identity.set(identity)
     try:
-        result = purchase_history.invoke({})
+        # A plain function since the tools became framework-neutral; the
+        # LangChain wrapper that had .invoke is built per agent, not here.
+        result = purchase_history()
     except Exception:  # noqa: BLE001 — a check-in must never fail the turn
         log.exception("Could not read purchases while reconciling interests")
         result = []
