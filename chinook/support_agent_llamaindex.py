@@ -238,6 +238,10 @@ def _agent(system_prompt: str) -> FunctionAgent:
 
 
 agent_app = AgentApp(
+    # This agent's tools consult in_evaluation() before writing (store.py), so a
+    # sandboxed suite can run against it while it serves customers: the runner
+    # marks each trial in the request's baggage and the SDK verifies the run.
+    eval_per_request=True,
     name="Chinook support agent (LlamaIndex)",
     description="Customer support for an online music store: catalogue questions "
     "and refunds (LlamaIndex FunctionAgent + Hopsworks feature store lookup).",

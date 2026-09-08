@@ -29,24 +29,21 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-# Set by the platform on a deployment meant for evaluation. AgentApp reports it
-# in the manifest as `eval_mode`, and the eval runner refuses to run a sandboxed
-# suite against a deployment that does not — a suite that makes the agent place
-# orders must not place them against real customers.
+# Whether this turn is an evaluation, asked at each write site below. True on
+# a deployment with EVAL_MODE=true, where every turn is; and true inside a turn
+# the eval runner marked in the request's baggage, once the SDK has verified the
+# run with Hopsworks — which is what lets one deployment serve customers and be
+# evaluated at the same time (the agents declare eval_per_request for it). A
+# suite that makes the agent place orders must not place them against real
+# customers, and the runner refuses a sandboxed suite unless the deployment
+# declares one of the two.
 #
 # What it changes here is exactly one thing: the three writes below do not
 # happen. Everything the run can observe is identical — the same tools are
 # called with the same arguments, and every tool returns the same text — because
-# a deployment that behaved differently under evaluation would be measuring
-# something other than the agent that serves customers.
-# Named EVAL_MODE rather than HOPSWORKS_EVAL_MODE: the platform reserves the
-# HOPS_, HOPSWORKS_, HOPSFS_ and AGENT_ prefixes, so a deployment cannot set
-# either of those and the flag would be unusable. Matches
-# hopsworks_agent_protocol.conventions.EVAL_MODE_ENV, which is what AgentApp
-# reports in the manifest and what the eval runner checks.
-EVAL_MODE = os.environ.get("EVAL_MODE", "").strip().lower() in (
-    "1", "true", "yes",
-)
+# an agent that behaved differently under evaluation would be measuring
+# something other than the one that serves customers.
+from hopsworks_agent_protocol.evaluation import in_evaluation
 
 CATALOG_FG = "chinook_catalog_embeddings"
 ARTIST_FG = "chinook_artist_catalog"
@@ -294,7 +291,7 @@ def _refund(
             for i in to_refund
         ]
     )
-    if EVAL_MODE:
+    if in_evaluation():
         log.info("eval mode: not recording a refund of %.2f for lines %s",
                  total, to_refund)
         return float(total)
@@ -657,7 +654,7 @@ def _record_order(key: str, rows: list[dict]) -> bool:
     leave the index advertising lines that do not exist, and every later read
     of that customer would come back short.
     """
-    if EVAL_MODE:
+    if in_evaluation():
         # Both writes skipped together. Doing the lines and not the index would
         # leave the customer advertising ids that do not exist, which is the
         # failure the ordering below exists to avoid.
