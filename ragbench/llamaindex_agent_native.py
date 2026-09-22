@@ -33,7 +33,7 @@ Deploy:
 import logging
 
 import hopsworks
-from hopsworks_agent_protocol import (  # noqa: E501
+from hopsworks_agents.protocol import (  # noqa: E501
     AgentApp,
     AgentError,
     AgentResponse,
@@ -154,7 +154,7 @@ agent_app = AgentApp(
         # tool still works — it falls back to keyword matching over SQL — so
         # switching this on later needs no prompt change:
         #
-        #   from hopsworks_agent_protocol import vector_store_for
+        #   from hopsworks_agents.protocol import vector_store_for
         #   embedder = lambda text: embed.encode(
         #       text, normalize_embeddings=True
         #   ).tolist()

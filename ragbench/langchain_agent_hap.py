@@ -25,7 +25,7 @@ Deploy:
 
 import asyncio
 
-from hopsworks_agent_protocol import AgentApp, AgentError, AgentResponse
+from hopsworks_agents.protocol import AgentApp, AgentError, AgentResponse
 
 # Reuses the existing predictor: constructing it connects to Hopsworks, the
 # MySQL chat store, and loads the embedding model (module-level, once).

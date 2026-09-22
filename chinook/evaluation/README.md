@@ -11,7 +11,7 @@ Two halves, and neither substitutes for the other:
 | Asks | Does it pass the cases we wrote down? | How is it doing on what customers actually ask? |
 | Input | `suites.json` + `tasks/*.jsonl` | Traces this deployment already served |
 | Expected answer | Yes, per task per check | None — `rubric.md` is all the judge has |
-| Run it | `apply.py`, then the deployment's Evaluation tab | `sample.py` |
+| Run it | `apply.py`, then `agent.run(suite)` or the deployment's Evals tab | `sample.py`, or `agent.sample(evaluator=...)` |
 
 A suite cannot contain a question nobody thought to write, which is most of what
 customers ask. Production cannot tell you whether a fix held, because the
@@ -24,16 +24,24 @@ with the same checks on every task; the other is one judge's opinion on whatever
 arrived. Both are useful; one average of the two is useful for nothing.
 
 ```bash
-export HOPSWORKS_HOST=https://...  HOPSWORKS_API_KEY=...
-python -m chinook.evaluation.apply                    # offline: library, suites, tasks
-python -m chinook.evaluation.apply --publish          # ...and freeze them, so they can run
-python -m chinook.evaluation.sample --deployment-id 12  # online: real traffic
+export HOPSWORKS_HOST=https://...  HOPSWORKS_PROJECT=...  HOPSWORKS_API_KEY=...
+python -m chinook.evaluation.apply                       # offline: library, suites, tasks
+python -m chinook.evaluation.apply --publish             # ...and freeze them, so they can run
+python -m chinook.evaluation.sample --agent customeragent  # online: real traffic
 ```
 
-Run from the repository root, since it is a module under `chinook`. `--insecure`
-skips TLS verification for a dev cluster whose ingress serves a certificate
-nothing trusts; `--project-id` names the project when there is no `hopsworks`
-client around to log in with.
+Run from the repository root, since it is a module under `chinook`. Both scripts
+log in with `hopsworks.login()` and work through the project's agent-serving API:
+
+```python
+agents = hopsworks.login().get_agent_serving()
+agent = agents.get_agent("customeragent")
+run = agent.run(agents.suites.find("Orders are recorded, never charged")).wait()
+agent.sample(evaluator=agents.evaluators.find("Chinook conversation quality"))
+```
+
+Inside a Hopsworks job or notebook no variables are needed; `--project` names
+another project than the connected one.
 
 - **`evaluators.json`** — the library. One named check each, written once.
   Several suites hold the agent to "`place_order` was not called", and writing a
@@ -47,7 +55,7 @@ client around to log in with.
 - **`rubric.md`** — what a good answer looks like, for grading real traffic. The
   only input online evaluation has, since production carries no expected
   answers.
-- **`sample.py`** — starts one online sample against a deployment.
+- **`sample.py`** — saves the rubric as the judge `Chinook conversation quality` in the library and starts one online sample against the agent with it.
 
 The suite comes before its tasks because its checks decide what a task must
 declare, and keeping the cases in files is what lets someone add twenty of them

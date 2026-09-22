@@ -19,7 +19,7 @@ Both examples split the same way, and it is the point of the examples:
   costs nothing, replicas share one index, and the index can be rebuilt without
   redeploying.
 - **The SDK owns the serving surface.** In the `_native` agents and the Chinook
-  one, [`hopsworks-agent-protocol`](https://github.com/gibchikafa/hopsworks-agent-protocol)
+  one, `hopsworks_agents.protocol` (in the [`hopsworks`](https://github.com/logicalclocks/hopsworks-api) package)
   provides the manifest, `/v1/chat` and `/v1/chat/stream`, health and readiness,
   CORS, tracing, and the memory tiers. What is left is the domain logic.
 

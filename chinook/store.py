@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 # called with the same arguments, and every tool returns the same text — because
 # an agent that behaved differently under evaluation would be measuring
 # something other than the one that serves customers.
-from hopsworks_agent_protocol.evaluation import in_evaluation
+from hopsworks_agents.protocol.evaluation import in_evaluation
 
 CATALOG_FG = "chinook_catalog_embeddings"
 ARTIST_FG = "chinook_artist_catalog"
@@ -798,7 +798,7 @@ def remember_interest(item: str, kind: Literal["wants_to_buy", "likes"]) -> str:
 def _memory_and_ctx():
     """The active store and request context, resolved the way the SDK's own
     memory tools do — a tool is called by the model and is handed neither."""
-    from hopsworks_agent_protocol.autoevents import current_context
+    from hopsworks_agents.protocol.autoevents import current_context
 
     ctx = current_context.get(None)
     if ctx is None or ctx.memory is None:

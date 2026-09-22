@@ -16,7 +16,7 @@ import re
 from agents import Agent, RunConfig, Runner, function_tool
 from pydantic import BaseModel
 
-from hopsworks_agent_protocol import (
+from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,

@@ -42,7 +42,7 @@ from llama_index.core.tools import FunctionTool
 from llama_index.llms.anthropic import Anthropic
 from typing_extensions import TypedDict
 
-from hopsworks_agent_protocol import (
+from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,

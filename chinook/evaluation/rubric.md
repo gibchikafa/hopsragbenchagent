@@ -9,7 +9,7 @@ sampled production conversation has no expected answer — nobody wrote one — 
 the only check that can say whether it was any good is a judge, and the only
 thing the judge has to go on is this.
 
-    python -m chinook.evaluation.sample --deployment-id <id>
+    python -m chinook.evaluation.sample --agent <name>
 
 Which is why it lives in the repo beside the suites rather than being typed into
 a dialog: it is a statement about this agent, it will be argued over, and a

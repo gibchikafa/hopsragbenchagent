@@ -35,7 +35,8 @@ AGENT_MODULES = (
 AGENT_FILES = tuple(f"{name}.py" for name in AGENT_MODULES)
 
 STUBBED = (
-    "hopsworks_agent_protocol",
+    "hopsworks_agents", "hopsworks_agents.protocol",
+    "hopsworks_agents.protocol.evaluation", "hopsworks_agents.protocol.autoevents",
     "hopsworks", "pandas", "sentence_transformers", "tabulate", "anthropic",
     "langchain_anthropic", "langchain_core", "langchain_core.tools",
     "langgraph", "langgraph.graph", "langgraph.graph.message",

@@ -40,7 +40,7 @@ import re
 from typing import Literal
 
 
-from hopsworks_agent_protocol import (  # noqa: E501
+from hopsworks_agents.protocol import (  # noqa: E501
     AgentApp,
     AgentError,
     ManagedMemoryService,

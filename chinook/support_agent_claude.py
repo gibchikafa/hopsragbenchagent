@@ -24,7 +24,7 @@ from claude_agent_sdk import (
     tool,
 )
 
-from hopsworks_agent_protocol import (
+from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,

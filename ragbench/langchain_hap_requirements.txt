@@ -8,4 +8,5 @@ openinference-instrumentation-langchain>=0.1.0
 sentence-transformers>=3.0.0
 opentelemetry-sdk>=1.0.0
 opentelemetry-exporter-otlp-proto-http>=1.0.0
-hopsworks-agent-protocol[langgraph] @ git+https://github.com/gibchikafa/hopsworks-agent-protocol.git
+# hopsworks_agents.protocol ships inside the hopsworks package; [agents] is the serving extra
+hopsworks[agents] @ git+https://github.com/gibchikafa/hopsworks-api.git@agent_protocol#subdirectory=python

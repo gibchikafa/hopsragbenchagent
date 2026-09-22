@@ -1,7 +1,11 @@
 """Recreate this agent's evaluation suites in a Hopsworks project.
 
+    export HOPSWORKS_HOST=... HOPSWORKS_PROJECT=... HOPSWORKS_API_KEY=...
     python -m chinook.evaluation.apply            # the library, the suites, their tasks
     python -m chinook.evaluation.apply --publish  # and freeze them, so they can run
+
+Everything goes through the project's agent-serving API, `project.get_agent_serving()`,
+which is also where the suites are run against the deployed agent.
 
 The tasks are files under `tasks/`, one per suite, in the columns the UI's Import
 understands. They are imported here the same way Import would — a column named
@@ -114,8 +118,6 @@ def expectations_of(row: dict, checks: list[dict]) -> dict[str, str]:
     two checks of the same shape needs the column named after the check — which is
     the same rule the UI applies, and the reason it is the same rule.
     """
-    from hopsworks_agent_eval.api import tool_expectation
-
     expectations: dict[str, str] = {}
 
     def claim(name: str, value: str) -> None:
@@ -143,27 +145,25 @@ def expectations_of(row: dict, checks: list[dict]) -> dict[str, str]:
     forbidden = _tool_list(row.get("forbiddenTools") or row.get("forbidden_tools"))
     if required or forbidden:
         if target := first("tools"):
-            claim(target, tool_expectation(required=required, forbidden=forbidden))
+            # a call check judges what must be called and what must not, so its
+            # one expectation holds both
+            claim(target, json.dumps({"required": required, "forbidden": forbidden}))
         elif required and (target := first("list")):
             claim(target, ", ".join(required))
     return expectations
 
 
-def _held_turns(task: dict) -> list[str]:
-    try:
-        messages = json.loads(task.get("inputMessages") or "[]")
-    except ValueError:
-        return [str(task.get("inputMessages", ""))]
-    return [str(m.get("content", "")) for m in messages if m.get("role") == "user"]
+def _held_turns(task) -> list[str]:
+    return [str(m.get("content", "")) for m in task.messages if m.get("role") == "user"]
 
 
-def import_tasks(api, suite: dict, checks: list[dict], path: Path) -> int:
+def import_tasks(suite, checks: list[dict], path: Path) -> int:
     """Add the cases in `path` that the suite does not already hold.
 
     Matched on the user's turns, so re-running adds nothing twice and a case
     appended to the file arrives without disturbing the ones before it.
     """
-    held = {tuple(_held_turns(task)) for task in api.tasks(suite)}
+    held = {tuple(_held_turns(task)) for task in suite.tasks()}
     added = 0
     for row in load_tasks(path):
         turns = turns_of(row)
@@ -172,30 +172,34 @@ def import_tasks(api, suite: dict, checks: list[dict], path: Path) -> int:
             continue
         if tuple(turns) in held:
             continue
-        api.add_task(suite, turns if len(turns) > 1 else turns[0],
-                     expectations_of(row, checks))
+        suite.add_task(turns if len(turns) > 1 else turns[0],
+                       expectations=expectations_of(row, checks))
         held.add(tuple(turns))
         added += 1
     return added
 
 
-def apply(api, publish: bool = False) -> None:
+def apply(agents, publish: bool = False) -> None:
     library, suites = load()
 
     # The library first: a suite copies its checks in, so they have to exist as
     # something to copy. Saving is by name, so re-running updates an entry rather
     # than making a second one called the same thing.
     checks_by_name = {}
-    saved = {entry["name"] for entry in api.evaluators()}
+    saved = {entry.name for entry in agents.evaluators.list()}
     for entry in library:
         checks_by_name[entry["name"]] = entry["checks"]
         if entry["name"] in saved:
             print(f"= {entry['name']} (library, exists)")
             continue
-        api.save_evaluator(entry["name"], entry["checks"], entry["description"])
+        agents.evaluators.save(entry["name"], entry["checks"], entry["description"])
         print(f"+ {entry['name']} (library)")
 
-    existing = {suite["name"]: suite for suite in api.suites()}
+    existing = {}
+    for suite in agents.suites.list():
+        # the newest version of each name is the one tasks go to
+        if suite.name not in existing or suite.version > existing[suite.name].version:
+            existing[suite.name] = suite
 
     for definition in suites:
         name = definition["name"]
@@ -203,7 +207,7 @@ def apply(api, publish: bool = False) -> None:
             print(f"= {name} (exists, left alone)")
             suite = existing[name]
         else:
-            suite = api.create_suite(
+            suite = agents.suites.create(
                 name,
                 description=definition["description"],
                 tags=definition["tags"],
@@ -216,7 +220,7 @@ def apply(api, publish: bool = False) -> None:
                 # between a rule someone can see and one hidden in a category.
                 gate_metric=definition.get("gateMetric", ""),
                 gate_threshold=definition.get("gateThreshold"),
-                evaluators=[
+                checks=[
                     # Copied in, not referenced. The suite is the record of what
                     # a run executed, and a reference would let the library
                     # change it after the fact.
@@ -235,7 +239,8 @@ def apply(api, publish: bool = False) -> None:
         # and refuses them, which is the point of publishing; the file is still
         # the record of what the next version should hold.
         tasks_file = Path(__file__).parent / definition["tasksFile"]
-        if suite.get("status") == "PUBLISHED":
+        task_count = suite.task_count or 0
+        if suite.published:
             print(f"  published, tasks left as they are ({tasks_file.name})")
         else:
             checks = [
@@ -243,15 +248,15 @@ def apply(api, publish: bool = False) -> None:
                 for entry_name in definition["evaluators"]
                 for check in checks_by_name[entry_name]
             ]
-            added = import_tasks(api, suite, checks, tasks_file)
-            suite = {**suite, "taskCount": len(api.tasks(suite))}
-            print(f"  tasks: {added} added, {suite['taskCount']} in the suite")
+            added = import_tasks(suite, checks, tasks_file)
+            task_count = len(suite.tasks())
+            print(f"  tasks: {added} added, {task_count} in the suite")
 
         # A suite with no tasks cannot be published — there would be nothing to
         # run — so this says so rather than failing with the server's refusal.
-        if publish and suite.get("status") != "PUBLISHED":
-            if suite.get("taskCount"):
-                api.publish(suite)
+        if publish and not suite.published:
+            if task_count:
+                suite.publish()
                 print(f"  published {name}")
             else:
                 print(f"  not published: {tasks_file.name} gave it no tasks")
@@ -266,30 +271,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--publish", action="store_true",
                         help="freeze each suite, which is what makes it runnable")
-    parser.add_argument("--project-id", type=int, default=None)
-    parser.add_argument("--insecure", action="store_true",
-                        help="skip TLS verification, for a dev cluster whose "
-                             "ingress serves a certificate nothing trusts")
+    parser.add_argument("--project", default=None,
+                        help="project name; HOPSWORKS_PROJECT when omitted, and the "
+                             "job's own project inside Hopsworks")
     args = parser.parse_args()
 
-    try:
-        from hopsworks_agent_eval.api import EvalApi
-    except ImportError:
-        sys.exit(
-            "needs hopsworks-agent-protocol[eval]: "
-            "pip install 'hopsworks-agent-protocol[eval]'"
-        )
+    if not os.environ.get("HOPSWORKS_API_KEY") and not os.environ.get("REST_ENDPOINT"):
+        sys.exit("set HOPSWORKS_HOST, HOPSWORKS_PROJECT and HOPSWORKS_API_KEY, "
+                 "or run this inside a Hopsworks job")
 
-    if not os.environ.get("HOPSWORKS_API_KEY") and not os.environ.get("SECRETS_DIR"):
-        sys.exit("set HOPSWORKS_API_KEY, or run this inside a Hopsworks job")
+    import hopsworks
 
-    if args.insecure:
-        import urllib3
-
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-    apply(EvalApi.from_env(project_id=args.project_id, verify=not args.insecure),
-          publish=args.publish)
+    project = hopsworks.login(project=args.project)
+    apply(project.get_agent_serving(), publish=args.publish)
 
 
 if __name__ == "__main__":
