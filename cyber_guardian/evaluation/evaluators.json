@@ -1,0 +1,154 @@
+[
+  {
+    "name": "Only the tools the step needs",
+    "description": "The tools the task names were called and the ones it forbids were not. A question runs no workflow; an alert never executes an action that needs approval.",
+    "checks": [
+      {
+        "type": "tool_call",
+        "name": "only_the_tools_needed"
+      }
+    ]
+  },
+  {
+    "name": "Routed the recipe's way",
+    "description": "Triage first; threat intel before the investigation for IOC matches and phishing, after it for EDR detections; the playbook after both; the incident opened last.",
+    "checks": [
+      {
+        "type": "tool_order",
+        "name": "routed_the_recipes_way"
+      }
+    ]
+  },
+  {
+    "name": "No tool errored",
+    "description": "Every lookup returned. The feature store is where this agent fails quietly.",
+    "checks": [
+      {
+        "type": "no_tool_error",
+        "name": "no_tool_errored"
+      }
+    ]
+  },
+  {
+    "name": "Explained its role",
+    "description": "Asked what it does, the orchestrator describes the workflow and asks for raw alert text; it runs nothing.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "explained_its_role",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "describes_the_workflow": {
+            "weight": 1,
+            "description": "The reply says it triages alerts, checks indicators against threat intelligence, investigates logs, proposes a playbook, and holds disruptive actions for approval."
+          },
+          "asks_for_an_alert": {
+            "weight": 1,
+            "description": "The reply asks the analyst to paste raw alert text, naming the kinds it takes (EDR detection, IOC match, phishing report)."
+          },
+          "did_nothing": {
+            "weight": 1,
+            "description": "Nothing was triaged, looked up or opened."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Reported the incident end to end",
+    "description": "Judges the report against the task's rubric: the classification, the threat named, the playbook, what waits for approval, the incident opened, and the JSON log.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "reported_end_to_end",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "matches_the_rubric": {
+            "weight": 2,
+            "description": "The report says what the task's rubric says it should: the alert type, the threat the intelligence named, the playbook chosen, and whether approval is required."
+          },
+          "step_by_step": {
+            "weight": 1,
+            "description": "The report walks through triage, threat intelligence, investigation and response in that order, with the findings of each, and names the incident id opened."
+          },
+          "json_log": {
+            "weight": 1,
+            "description": "The report ends with a JSON block holding alert_type, entities, triage, threat_intel, investigation, recommended_actions, incident_id and hitl_approval_required."
+          },
+          "nothing_invented": {
+            "weight": 1,
+            "description": "Every finding in the report appears in a tool result; no threat, host, process or connection is added from general knowledge."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results",
+          "rubric"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "The conversation got there",
+    "description": "Judges the whole exchange against the task's rubric: what should have happened by the end, and what must not have.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "the_conversation_got_there",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "did_what_the_rubric_says": {
+            "weight": 1,
+            "description": "By the end of the conversation the agent did what the task's rubric describes and did not do what it says must not happen."
+          },
+          "said_so_plainly": {
+            "weight": 1,
+            "description": "Each turn's reply states what was done in that turn, and nothing more: a duplicate is reported as one, an approval confirms exactly the actions that ran."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results",
+          "rubric"
+        ]
+      }
+    ]
+  }
+]

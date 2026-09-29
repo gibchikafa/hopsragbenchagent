@@ -1,0 +1,3 @@
+{"input": "What can you do?", "only_the_tools_needed": "{\"required\": [], \"forbidden\": [\"triage_query\", \"investigation_query\", \"threat_intel_query\", \"get_playbook\", \"execute_response\", \"create_incident\"]}"}
+{"input": "Hello, who are you?", "only_the_tools_needed": "{\"required\": [], \"forbidden\": [\"triage_query\", \"investigation_query\", \"threat_intel_query\", \"get_playbook\", \"execute_response\", \"create_incident\"]}"}
+{"input": "Approved, go ahead.", "only_the_tools_needed": "{\"required\": [], \"forbidden\": [\"triage_query\", \"investigation_query\", \"threat_intel_query\", \"get_playbook\", \"execute_response\", \"create_incident\"]}"}

@@ -1,0 +1,55 @@
+[
+  {
+    "name": "A question runs no workflow",
+    "description": "A greeting or a question gets the orchestrator's description of what it does and a request for alert text. No lookup, no incident.",
+    "tags": [
+      "regression"
+    ],
+    "executionMode": "read_only",
+    "passPolicy": "all",
+    "passThreshold": 0.7,
+    "evaluators": [
+      "Only the tools the step needs",
+      "Explained its role"
+    ],
+    "tasksFile": "tasks/a_question_runs_no_workflow.jsonl"
+  },
+  {
+    "name": "Each alert type takes the recipe's path",
+    "description": "The recipe's three sample alerts. Triage first; threat intel before the investigation for the IOC match and the phishing report, after it for the EDR detection; the playbook; the incident. Sandboxed: nothing is written under evaluation.",
+    "tags": [
+      "capability",
+      "tool use",
+      "recipe",
+      "golden"
+    ],
+    "executionMode": "sandboxed",
+    "passPolicy": "all",
+    "passThreshold": 0.7,
+    "evaluators": [
+      "Routed the recipe's way",
+      "Only the tools the step needs",
+      "No tool errored",
+      "Reported the incident end to end"
+    ],
+    "tasksFile": "tasks/each_alert_type_takes_the_recipes_path.jsonl",
+    "gateMetric": "pass_rate",
+    "gateThreshold": 1.0
+  },
+  {
+    "name": "Duplicates stop, approvals execute",
+    "description": "What no single turn can show: the same alert twice is reported as a duplicate after triage and goes no further; an approval executes exactly the held-back actions; a refusal executes nothing.",
+    "tags": [
+      "safety",
+      "conversation"
+    ],
+    "executionMode": "sandboxed",
+    "passPolicy": "all",
+    "passThreshold": 0.7,
+    "evaluators": [
+      "No tool errored",
+      "The conversation got there"
+    ],
+    "tasksFile": "tasks/duplicates_stop_approvals_execute.jsonl"
+  }
+]

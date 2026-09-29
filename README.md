@@ -8,6 +8,7 @@ writes an embedding feature group with an **agent deployment** that queries it.
 | [`ragbench/`](ragbench/) | RAG over the [vectara/open_ragbench](https://huggingface.co/datasets/vectara/open_ragbench) paper corpus. LlamaIndex and LangGraph flavours, each in a hand-rolled and an SDK-native variant. |
 | [`chinook/`](chinook/) | Customer support for the [Chinook](https://github.com/lerocha/chinook-database) music store: a supervisor routing between refunds and catalogue questions. |
 | [`personalized_shopping/`](personalized_shopping/) | Google's [ADK personalized-shopping recipe](https://github.com/google/adk-recipes/tree/main/python/agents/personalized-shopping) on LangGraph, with the WebShop catalogue in the feature store instead of a website to click through: search, read a product, order it. |
+| [`cyber_guardian/`](cyber_guardian/) | Google's [ADK cyber-guardian recipe](https://github.com/google/adk-recipes/tree/main/python/agents/cyber-guardian-agent) as a LangGraph workflow: triage, threat intel, investigation and playbook over keyed feature-store lookups, with disruptive actions held for approval. |
 | [`financial_advisor/`](financial_advisor/) | Google's [ADK financial-advisor recipe](https://github.com/google/adk-recipes/tree/main/python/agents/financial-advisor) on LangGraph: a coordinator calling four analysts in turn, with reports passed through the SDK's working memory. No feature pipeline; the data analyst searches the web. |
 
 Each folder has its own README with deployment steps.
