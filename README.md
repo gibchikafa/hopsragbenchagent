@@ -7,6 +7,7 @@ writes an embedding feature group with an **agent deployment** that queries it.
 |---|---|
 | [`ragbench/`](ragbench/) | RAG over the [vectara/open_ragbench](https://huggingface.co/datasets/vectara/open_ragbench) paper corpus. LlamaIndex and LangGraph flavours, each in a hand-rolled and an SDK-native variant. |
 | [`chinook/`](chinook/) | Customer support for the [Chinook](https://github.com/lerocha/chinook-database) music store: a supervisor routing between refunds and catalogue questions. |
+| [`financial_advisor/`](financial_advisor/) | Google's [ADK financial-advisor recipe](https://github.com/google/adk-recipes/tree/main/python/agents/financial-advisor) on LangGraph: a coordinator calling four analysts in turn, with reports passed through the SDK's working memory. No feature pipeline; the data analyst searches the web. |
 
 Each folder has its own README with deployment steps.
 

@@ -1,0 +1,11 @@
+langchain-core>=1.0
+langchain-anthropic>=1.0
+langgraph>=1.0
+openinference-instrumentation-langchain>=0.1.0
+opentelemetry-sdk>=1.0.0
+opentelemetry-exporter-otlp-proto-http>=1.0.0
+# The agent protocol (hopsworks_agents.protocol) ships inside the hopsworks
+# package; [agents] is the serving extra. From the fork branch until it lands on
+# logicalclocks main, at which point the python-agent-pipeline image carries it
+# and this line goes.
+hopsworks[agents] @ git+https://github.com/gibchikafa/hopsworks-api.git@agent_protocol#subdirectory=python

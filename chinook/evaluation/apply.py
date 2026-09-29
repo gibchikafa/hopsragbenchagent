@@ -57,8 +57,9 @@ import os
 import sys
 from pathlib import Path
 
-LIBRARY = Path(__file__).with_name("evaluators.json")
-SUITES = Path(__file__).with_name("suites.json")
+#: Where the library, the suites and the task files live. Another agent's
+#: evaluation reuses this module by pointing `apply` at its own directory.
+HERE = Path(__file__).parent
 
 # Two of these make the agent place orders, so they are sandboxed and the runner
 # refuses them unless the deployment reports eval_mode. That means EVAL_MODE=true
@@ -84,8 +85,11 @@ SHAPES = {
 }
 
 
-def load() -> tuple[list[dict], list[dict]]:
-    return json.loads(LIBRARY.read_text()), json.loads(SUITES.read_text())
+def load(directory: Path = HERE) -> tuple[list[dict], list[dict]]:
+    return (
+        json.loads((directory / "evaluators.json").read_text()),
+        json.loads((directory / "suites.json").read_text()),
+    )
 
 
 def load_tasks(path: Path) -> list[dict]:
@@ -179,8 +183,8 @@ def import_tasks(suite, checks: list[dict], path: Path) -> int:
     return added
 
 
-def apply(agents, publish: bool = False) -> None:
-    library, suites = load()
+def apply(agents, publish: bool = False, directory: Path = HERE) -> None:
+    library, suites = load(directory)
 
     # The library first: a suite copies its checks in, so they have to exist as
     # something to copy. Saving is by name, so re-running updates an entry rather
@@ -238,7 +242,7 @@ def apply(agents, publish: bool = False) -> None:
         # The cases, from the file beside the suite. A published suite is frozen
         # and refuses them, which is the point of publishing; the file is still
         # the record of what the next version should hold.
-        tasks_file = Path(__file__).parent / definition["tasksFile"]
+        tasks_file = directory / definition["tasksFile"]
         task_count = suite.task_count or 0
         if suite.published:
             print(f"  published, tasks left as they are ({tasks_file.name})")

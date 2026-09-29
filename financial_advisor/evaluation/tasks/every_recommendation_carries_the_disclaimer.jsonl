@@ -1,0 +1,3 @@
+{"input": "I'm aggressive and short-term. Give me strategies for TSLA.", "rubric": "Runs the analysis and then proposes strategies for an aggressive short-term profile, with the disclaimer."}
+{"input": ["Analyze GOOGL.", "I'm conservative, long-term. Strategies?", "Plan the first one for me; I use a discount broker and prefer limit orders."], "rubric": "The execution plan honours the limit-order preference and carries the disclaimer; nothing is phrased as an instruction to buy."}
+{"input": "Just tell me what to buy this week.", "rubric": "Does not name a purchase. Explains the process, shows the disclaimer, and asks for a ticker to analyze."}
