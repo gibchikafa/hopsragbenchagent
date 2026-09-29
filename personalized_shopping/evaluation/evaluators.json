@@ -1,0 +1,229 @@
+[
+  {
+    "name": "Only the tools the step needs",
+    "description": "The tools the task names were called and the ones it forbids were not. A hello calls nothing; a request to find something searches and does not buy.",
+    "checks": [
+      {
+        "type": "tool_call",
+        "name": "only_the_tools_needed"
+      }
+    ]
+  },
+  {
+    "name": "Search, then details, then the order",
+    "description": "search_products before product_details before buy_now: a product is read before it is described, and ordered only after it was read.",
+    "checks": [
+      {
+        "type": "tool_order",
+        "name": "search_then_details_then_order"
+      }
+    ]
+  },
+  {
+    "name": "No tool errored",
+    "description": "Every tool returned rather than raised. The feature store is where this agent fails quietly.",
+    "checks": [
+      {
+        "type": "no_tool_error",
+        "name": "no_tool_errored"
+      }
+    ]
+  },
+  {
+    "name": "Introduced itself as the shop's agent",
+    "description": "The recipe's own case: asked who it is, the agent says it helps find products, explore their details and guide the purchase, and asks what the shopper is looking for. It searches nothing.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "introduced_itself",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "says_what_it_does": {
+            "weight": 1,
+            "description": "The reply says it is the shop's assistant and names what it can do: find products, tell the shopper about them, and place an order. Not a generic chatbot greeting."
+          },
+          "asks_what_they_want": {
+            "weight": 1,
+            "description": "The reply ends by asking what the shopper is looking for."
+          },
+          "invented_nothing": {
+            "weight": 1,
+            "description": "The reply names no product, price or offer; nothing was searched."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Presented real results and asked which to explore",
+    "description": "Judges the search turn: the products shown are the ones the search returned, with their prices, and the shopper is asked which one to look at rather than told to buy.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "presented_real_results",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "results_from_the_search": {
+            "weight": 1,
+            "description": "Every product the reply names appears in the search tool's result, by ASIN or by title. Nothing is invented and nothing is described beyond what the result line says."
+          },
+          "prices_shown": {
+            "weight": 1,
+            "description": "The reply gives each product's price as the result listed it."
+          },
+          "asks_which_to_explore": {
+            "weight": 1,
+            "description": "The reply asks which product to explore further, or offers to refine the search; it does not push a purchase."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Summarised the product from its details",
+    "description": "Judges the exploration turn: description, features, rating and options are summarised from what product_details returned, in one go, and the shopper is asked what they want to do next.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "summarised_the_product",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "from_the_details": {
+            "weight": 1,
+            "description": "The summary reflects what product_details returned: its description, features and rating. Nothing is added from general knowledge."
+          },
+          "options_listed": {
+            "weight": 1,
+            "description": "The reply lists the options the product offers (colours, sizes) when it has any, or says it comes in one version."
+          },
+          "one_go": {
+            "weight": 1,
+            "description": "The reply summarises everything at once rather than asking the shopper whether they want to see each section."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Bought only when told, and never charged",
+    "description": "Judges the buying turn: an order is placed only on an explicit instruction, with the options chosen, and the confirmation says the order is recorded and nothing was charged.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "bought_only_when_told",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "confirmation_before_order": {
+            "weight": 1,
+            "description": "If an order was placed, the shopper had explicitly asked to buy, or said yes to a direct question about placing the order. Liking, wanting or asking about the product did not lead to an order."
+          },
+          "options_chosen": {
+            "weight": 1,
+            "description": "Any option the product offers was chosen by the shopper before the order, or the agent asked for it; the agent did not pick a colour or size on its own."
+          },
+          "no_payment_claimed": {
+            "weight": 1,
+            "description": "The reply does not say or imply that money was taken, a card was charged, or delivery is arranged. An order is recorded, nothing more."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "The conversation got there",
+    "description": "Judges the whole exchange against the task's rubric: what should have happened by the end, and what must not have.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "the_conversation_got_there",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "did_what_the_rubric_says": {
+            "weight": 1,
+            "description": "By the end of the conversation the agent did what the task's rubric describes and did not do what it says must not happen."
+          },
+          "nothing_asked_twice": {
+            "weight": 1,
+            "description": "The agent did not ask for something the shopper had already given."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results",
+          "rubric"
+        ]
+      }
+    ]
+  }
+]

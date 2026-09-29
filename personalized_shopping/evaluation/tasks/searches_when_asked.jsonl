@@ -1,0 +1,4 @@
+{"input": "Help me look for women's denim jeans, only return the search results.", "only_the_tools_needed": "{\"required\": [\"search_products\"], \"forbidden\": [\"product_details\", \"buy_now\"]}"}
+{"input": "Hello, can you help me find a summer dress? I want something flowy and floral.", "only_the_tools_needed": "{\"required\": [\"search_products\"], \"forbidden\": [\"product_details\", \"buy_now\"]}"}
+{"input": "I'm looking for a rustic console table for my entryway.", "only_the_tools_needed": "{\"required\": [\"search_products\"], \"forbidden\": [\"product_details\", \"buy_now\"]}"}
+{"input": "Do you have any bluetooth speakers under $50?", "only_the_tools_needed": "{\"required\": [\"search_products\"], \"forbidden\": [\"buy_now\"]}"}

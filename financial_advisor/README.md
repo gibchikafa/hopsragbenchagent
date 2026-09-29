@@ -56,9 +56,15 @@ reply = advisor.chat("Hello. What can you do for me?")
 advisor.chat("Analyze NVDA for me.", conversation_id=reply.conversation_id)
 ```
 
-`prompts.py` must sit beside `advisor_agent.py`; upload both (`hops agent create`
-takes a directory with a `pyproject.toml`, or upload `prompts.py` to the agent's
-folder under `Resources/agents/financialadvisor`).
+`prompts.py` must sit beside `advisor_agent.py`. A git-backed deployment brings the
+whole repository, so that is the simplest way to ship both:
+
+```python
+agents.deploy_agent("financial_advisor/advisor_agent.py", name="financialadvisor",
+                    git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
+                    git_branch="main", requirements="financial_advisor/requirements.txt",
+                    environment="python-agent-pipeline", tracing={"enabled": True}).start()
+```
 
 ## Environment variables
 

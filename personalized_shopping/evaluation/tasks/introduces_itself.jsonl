@@ -1,0 +1,3 @@
+{"input": "Hello, who are you?", "only_the_tools_needed": "{\"required\": [], \"forbidden\": [\"search_products\", \"product_details\", \"buy_now\"]}"}
+{"input": "Hi! What can you do?", "only_the_tools_needed": "{\"required\": [], \"forbidden\": [\"search_products\", \"product_details\", \"buy_now\"]}"}
+{"input": "Good morning.", "only_the_tools_needed": "{\"required\": [], \"forbidden\": [\"search_products\", \"product_details\", \"buy_now\"]}"}
