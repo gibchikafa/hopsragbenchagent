@@ -22,7 +22,7 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
-    anthropic_summarizer,
+    openai_summarizer,
 )
 from openai.types.responses import ResponseTextDeltaEvent
 
@@ -73,7 +73,7 @@ agent_app = AgentApp(
     ],
     placeholder="What are you looking for? You can also send a photo...",
     input_modalities=["text", "image"],
-    memory=ManagedMemoryService(summarize=anthropic_summarizer()),
+    memory=ManagedMemoryService(summarize=openai_summarizer()),
     tool_events=True,
 )
 

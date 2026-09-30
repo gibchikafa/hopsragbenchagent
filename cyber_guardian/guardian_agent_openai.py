@@ -27,7 +27,7 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
-    anthropic_summarizer,
+    openai_summarizer,
 )
 from hopsworks_agents.protocol.autoevents import current_context
 from openai.types.responses import ResponseTextDeltaEvent
@@ -226,7 +226,7 @@ agent_app = AgentApp(
     "I'll triage it, check the indicators, investigate the logs and propose the playbook.",
     suggested_prompts=["What can you do?"],
     placeholder="Paste the raw alert text...",
-    memory=ManagedMemoryService(summarize=anthropic_summarizer()),
+    memory=ManagedMemoryService(summarize=openai_summarizer()),
     tool_events=True,
 )
 

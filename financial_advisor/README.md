@@ -79,7 +79,8 @@ agents.deploy_agent("financial_advisor/advisor_agent.py", name="financialadvisor
 
 | Variable | Description |
 |---|---|
-| `ANTHROPIC_API_KEY` | The analysts, the coordinator and the memory summariser all run on Claude. Web search must be enabled for the key's organisation. |
+| `ANTHROPIC_API_KEY` | `advisor_agent.py`: the analysts, the coordinator and the memory summariser all run on Claude. Web search must be enabled for the key's organisation. |
+| `OPENAI_API_KEY` | `advisor_agent_openai.py`: the agents, the web search and the memory summariser (`openai_summarizer`). |
 | `ADVISOR_MODEL` | Model for the coordinator and the analysts. Default `claude-sonnet-4-5`. |
 | `ADVISOR_MAX_SEARCHES` | Web searches the data analyst may run per report. Default 8; each is a paid call. |
 

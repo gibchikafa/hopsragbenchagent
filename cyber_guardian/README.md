@@ -91,7 +91,8 @@ print(guardian.chat(open("cyber_guardian/sample_alerts.txt").read().split("Sampl
 
 | Variable | Description |
 |---|---|
-| `ANTHROPIC_API_KEY` | The workflow's model calls and the memory summariser run on Claude. |
+| `ANTHROPIC_API_KEY` | `guardian_agent.py`: the workflow's model calls and the memory summariser run on Claude. |
+| `OPENAI_API_KEY` | `guardian_agent_openai.py`: the orchestrator, the analysts and the memory summariser (`openai_summarizer`). |
 | `GUARDIAN_MODEL` | Model for classification, investigation and the report. Default `claude-sonnet-4-5`. |
 | `CYBER_GUARDIAN_DATA` | Pipeline only: a directory holding the recipe's CSVs, to skip the download. |
 

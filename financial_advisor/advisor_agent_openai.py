@@ -23,7 +23,7 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
-    anthropic_summarizer,
+    openai_summarizer,
 )
 from openai.types.responses import ResponseTextDeltaEvent
 
@@ -179,7 +179,7 @@ agent_app = AgentApp(
         "I'm a conservative, long-term investor. What strategies fit MSFT?",
     ],
     placeholder="A ticker to analyze, or the next step...",
-    memory=ManagedMemoryService(summarize=anthropic_summarizer(), max_state_value_chars=mem.MAX_REPORT_CHARS),
+    memory=ManagedMemoryService(summarize=openai_summarizer(), max_state_value_chars=mem.MAX_REPORT_CHARS),
     tool_events=True,
 )
 

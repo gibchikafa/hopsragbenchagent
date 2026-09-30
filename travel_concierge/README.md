@@ -82,9 +82,8 @@ concierge.chat("Tell me more what I can do in Peru", conversation_id=reply.conve
 
 | Variable | Description |
 |---|---|
-| `OPENAI_API_KEY` | The agents run on OpenAI models by default (the SDK's default model); the web search tool needs it too. |
+| `OPENAI_API_KEY` | The agents run on OpenAI models by default (the SDK's default model); the web search tool and the memory summariser (`openai_summarizer`) use it too, so one key covers the deployment. |
 | `CONCIERGE_MODEL` | A model name for OpenAI, or a LiteLLM name such as `anthropic/claude-sonnet-4-5` (then that provider's key is needed). |
-| `ANTHROPIC_API_KEY` | The memory summariser. |
 | `TRAVEL_CONCIERGE_SCENARIO` | The scenario file loaded on a conversation's first turn. Default `profiles/itinerary_empty_default.json`; the pre-trip and in-trip flows need `profiles/itinerary_seattle_example.json`. |
 
 ## Evaluation

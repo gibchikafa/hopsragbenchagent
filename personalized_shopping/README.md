@@ -82,7 +82,8 @@ shop.chat("Hello, who are you?").text
 
 | Variable | Description |
 |---|---|
-| `ANTHROPIC_API_KEY` | The agent and the memory summariser run on Claude. |
+| `ANTHROPIC_API_KEY` | `shopping_agent.py`: the agent and the memory summariser run on Claude. |
+| `OPENAI_API_KEY` | `shopping_agent_openai.py`: the agent and the memory summariser (`openai_summarizer`). |
 | `WEBSHOP_MODEL` | Model for the agent. Default `claude-sonnet-4-5`. |
 | `WEBSHOP_ITEMS` | Pipeline only: a local path to `items_shuffle_1000.json`. |
 

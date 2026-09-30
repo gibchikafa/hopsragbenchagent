@@ -39,7 +39,7 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
-    anthropic_summarizer,
+    openai_summarizer,
 )
 from openai.types.responses import ResponseTextDeltaEvent
 
@@ -156,7 +156,7 @@ agent_app = AgentApp(
     placeholder="Where would you like to go?",
     input_modalities=["text", "image"],
     memory=ManagedMemoryService(
-        summarize=anthropic_summarizer(),
+        summarize=openai_summarizer(),
         long_term=True,
         max_state_value_chars=MAX_STATE_CHARS,
     ),

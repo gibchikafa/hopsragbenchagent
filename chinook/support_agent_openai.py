@@ -20,8 +20,8 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
-    anthropic_summarizer,
     memory_tools,
+    openai_summarizer,
     remember,
 )
 
@@ -243,7 +243,7 @@ agent_app = AgentApp(
     ],
     placeholder="Ask about the catalogue, or request a refund...",
     memory=ManagedMemoryService(
-        summarize=anthropic_summarizer(),
+        summarize=openai_summarizer(),
         long_term=True,
     ),
     tool_events=True,
