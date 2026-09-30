@@ -14,6 +14,8 @@ coordinator ─┬─▶ analyze_market      data_analyst:      web search → m
 | File | Purpose |
 |---|---|
 | `advisor_agent.py` | The coordinator (a LangGraph ReAct agent) with the analysts as its tools, served by `AgentApp` |
+| `advisor_agent_openai.py` | The same on the OpenAI Agents SDK: the analysts are `Agent`s run by the coordinator's tools, the data analyst with the SDK's web search |
+| `advisor_memory.py` | The reports in working memory, shared by both entry points |
 | `prompts.py` | The recipe's prompts, ported; what changed and why is in its docstring |
 | `requirements.txt` | Deployment requirements |
 | `evaluation/` | The recipe's evaluation cases as Hopsworks suites, plus two the recipe could not express |
@@ -38,6 +40,13 @@ continues from the next step.
 Only the coordinator speaks to the user. The analysts' model calls are tagged
 and their tokens filtered out of the stream, so a report reaches the user once,
 explained by the coordinator, rather than twice.
+
+## Two entry points
+
+`advisor_agent.py` runs on LangGraph with Claude and its web search; `advisor_agent_openai.py`
+on the OpenAI Agents SDK with OpenAI's models and the SDK's `WebSearchTool` (`OPENAI_API_KEY`),
+or any LiteLLM model name in `ADVISOR_OPENAI_MODEL`. Both keep the reports in the same
+working-memory keys, so either can continue a plan the other started.
 
 ## Deploy
 

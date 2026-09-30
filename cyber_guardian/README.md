@@ -19,6 +19,7 @@ other    ─▶ converse
 | `feature_pipeline.py` | The recipe's six SecOps CSVs into seven keyed feature groups, each shaped for the question a tool asks |
 | `store.py` | The recipe's tools over the feature store, with the `in_evaluation()` guard on the two that write |
 | `guardian_agent.py` | The workflow as a LangGraph `StateGraph`, served by `AgentApp` |
+| `guardian_agent_openai.py` | The recipe's own shape on the OpenAI Agents SDK: an orchestrator whose plan is its prompt, with the analysts as tools |
 | `prompts.py` | The three things the model is asked; what changed from the recipe and why is in its docstring |
 | `sample_alerts.txt` | The recipe's three sample alerts, to paste into the chat |
 | `requirements.txt` | Deployment requirements |
@@ -56,6 +57,15 @@ The online store is a keyed lookup, not a query engine, so each table is
 shaped for its question: the logs are one row per host holding its events as
 JSON, and the filtering the recipe's SQL did (parent process, destination IP,
 last 24 hours) happens in Python on that row.
+
+## Two entry points
+
+`guardian_agent.py` makes the recipe's execution plan a graph: the routing is edges and the
+model is asked three things. `guardian_agent_openai.py` keeps the recipe's own shape: an
+orchestrator told the plan in its prompt, with the four analysts attached as tools, each
+wrapping one store lookup; held actions wait in working memory for `approve_pending`. Same
+store, same feature groups, same evaluation suites. The OpenAI entry point runs on OpenAI's
+models (`OPENAI_API_KEY`) or any LiteLLM model name in `GUARDIAN_OPENAI_MODEL`.
 
 ## Deploy
 

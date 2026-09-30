@@ -127,3 +127,45 @@ def test_an_image_turn_becomes_image_blocks(stubbed):
     assert content[0] == {"type": "text", "text": "Find me this product."}
     assert content[1]["source"] == {"type": "base64", "media_type": "image/webp", "data": "QUJD"}
     assert shopping_agent._user_content(types.SimpleNamespace(text="hi", images=[])) == "hi"
+
+
+# ── the OpenAI Agents SDK entry point ────────────────────────────────────────
+
+OPENAI_STUBBED = (
+    "agents", "agents.stream_events", "agents.extensions", "agents.extensions.models",
+    "agents.extensions.models.litellm_model", "openai", "openai.types", "openai.types.responses",
+)
+
+
+class _FakeAgent:
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+        self.tools = kw.get("tools", [])
+        self.handoffs = kw.get("handoffs", [])
+
+    def as_tool(self, tool_name, tool_description, **kw):
+        return types.SimpleNamespace(name=tool_name, description=tool_description, agent=self)
+
+
+@pytest.fixture
+def openai_stubbed(stubbed, monkeypatch):
+    for name in OPENAI_STUBBED:
+        module = types.ModuleType(name)
+        module.__getattr__ = lambda _n: mock.MagicMock()
+        monkeypatch.setitem(sys.modules, name, module)
+    agents = sys.modules["agents"]
+    agents.Agent = _FakeAgent
+    agents.function_tool = lambda fn: types.SimpleNamespace(name=fn.__name__, description=fn.__doc__, fn=fn)
+    agents.ModelSettings = lambda **kw: kw
+    agents.RunConfig = lambda **kw: kw
+    agents.WebSearchTool = lambda: "web_search"
+    yield
+
+
+def test_the_openai_variant_wraps_the_same_store_tools(openai_stubbed):
+    sys.modules.pop("shopping_agent_openai", None)
+    import shopping_agent_openai as o  # noqa: PLC0415
+
+    assert o.agent_app is not None
+    assert [t.name for t in o.agent.tools] == list(TOOLS)
+    assert o.agent.instructions.startswith("You are a webshop agent")

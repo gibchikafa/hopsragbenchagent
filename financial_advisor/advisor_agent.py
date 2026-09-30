@@ -46,12 +46,26 @@ from hopsworks_agents.protocol import (
     ManagedMemoryService,
     anthropic_summarizer,
 )
-from hopsworks_agents.protocol.autoevents import current_context
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 
+from advisor_memory import (
+    EXECUTION_PLAN,
+    EXECUTION_PREFERENCES,
+    INVESTMENT_PERIOD,
+    MARKET_ANALYSIS,
+    MAX_REPORT_CHARS,
+    RISK_ATTITUDE,
+    RISK_EVALUATION,
+    STRATEGIES,
+    TICKER,
+)
+from advisor_memory import missing as _missing
+from advisor_memory import progress_block as _progress_block
+from advisor_memory import read as _read
+from advisor_memory import write as _write
 from prompts import (
     COORDINATOR_PROMPT,
     DATA_ANALYST_PROMPT,
@@ -63,56 +77,6 @@ from prompts import (
 MODEL = os.environ.get("ADVISOR_MODEL", "claude-sonnet-4-5")
 #: how many searches the data analyst may run per report; each is a paid call
 MAX_SEARCHES = int(os.environ.get("ADVISOR_MAX_SEARCHES", "8"))
-#: a report is a few thousand tokens; the default 4k characters would cut one
-MAX_REPORT_CHARS = 32_000
-
-# ── the reports: working memory for this conversation ────────────────────────
-#
-# The recipe's state keys. `session` scope is this conversation only, which is
-# what a plan is: a new chat starts over, as the recipe's session would.
-SCOPE = "session"
-MARKET_ANALYSIS = "market_data_analysis_output"
-STRATEGIES = "proposed_trading_strategies_output"
-EXECUTION_PLAN = "execution_plan_output"
-RISK_EVALUATION = "risk_evaluation_output"
-TICKER = "ticker"
-RISK_ATTITUDE = "user_risk_attitude"
-INVESTMENT_PERIOD = "user_investment_period"
-EXECUTION_PREFERENCES = "user_execution_preferences"
-
-
-def _memory_and_owner():
-    """The store and this conversation's id, resolved the way the SDK's own tools do.
-
-    A tool is called by the model and handed neither; the request context is a
-    contextvar the SDK sets for the turn.
-    """
-    ctx = current_context.get(None)
-    if ctx is None or ctx.memory is None:
-        return None, None
-    return ctx.memory, ctx.conversation_id
-
-
-def _read(key: str) -> str:
-    memory, owner = _memory_and_owner()
-    if memory is None:
-        return ""
-    return memory.get_state(SCOPE, owner, key) or ""
-
-
-def _write(key: str, value: str) -> None:
-    memory, owner = _memory_and_owner()
-    if memory is None:
-        return
-    ctx = current_context.get(None)
-    memory.set_state(
-        SCOPE,
-        owner,
-        key,
-        value,
-        source_ref=f'{{"conversation_id": "{owner}", "turn_id": "{ctx.turn_id}"}}',
-    )
-
 
 # ── the analysts ─────────────────────────────────────────────────────────────
 #
@@ -144,19 +108,6 @@ async def _analyst(system: str, brief: str, llm: Any = None) -> str:
         config={"tags": [ANALYST_TAG]},
     )
     return _text_of(reply)
-
-
-def _missing(*needed: tuple[str, str]) -> str:
-    """The recipe's prerequisite check, for every analyst after the first."""
-    absent = [name for name, key in needed if not _read(key)]
-    if not absent:
-        return ""
-    return (
-        "Error: the foundational input(s) "
-        + ", ".join(absent)
-        + " are missing. The earlier step(s) must be completed first; run them, "
-        "then call this analyst again."
-    )
 
 
 @tool
@@ -351,37 +302,6 @@ async def stream(request, ctx):
         _coordinator_only(coordinator.astream_events({"messages": messages}, version="v2"))
     ):
         yield delta
-
-
-def _progress_block() -> str:
-    done = [
-        label
-        for label, key in (
-            ("market analysis", MARKET_ANALYSIS),
-            ("trading strategies", STRATEGIES),
-            ("execution plan", EXECUTION_PLAN),
-            ("risk evaluation", RISK_EVALUATION),
-        )
-        if _read(key)
-    ]
-    if not done:
-        return ""
-    profile = ", ".join(
-        f"{name}: {_read(key)}"
-        for name, key in (
-            ("ticker", TICKER),
-            ("risk attitude", RISK_ATTITUDE),
-            ("investment period", INVESTMENT_PERIOD),
-        )
-        if _read(key)
-    )
-    return (
-        "\n\nProgress in this conversation: the "
-        + ", ".join(done)
-        + " report(s) are already done and kept for the later analysts"
-        + (f" ({profile})" if profile else "")
-        + ". Continue from the next step; do not repeat a completed one unless asked."
-    )
 
 
 if __name__ == "__main__":

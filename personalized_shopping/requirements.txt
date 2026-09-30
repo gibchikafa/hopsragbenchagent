@@ -6,6 +6,9 @@ sentence-transformers>=3.0.0
 openinference-instrumentation-langchain>=0.1.0
 opentelemetry-sdk>=1.0.0
 opentelemetry-exporter-otlp-proto-http>=1.0.0
+# The OpenAI Agents SDK entry point; [litellm] for models other than OpenAI's
+openai-agents[litellm]>=0.18.3
+openinference-instrumentation-openai-agents>=1.5.0
 # The agent protocol (hopsworks_agents.protocol) ships inside the hopsworks
 # package; [agents] is the serving extra. From the fork branch until it lands on
 # logicalclocks main, at which point the python-agent-pipeline image carries it

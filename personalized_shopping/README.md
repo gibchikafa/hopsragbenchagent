@@ -16,6 +16,8 @@ shopper ──▶ agent ─┬─▶ search_products   vector search over the ca
 | `feature_pipeline.py` | Loads WebShop's 1,000-product catalogue into three feature groups: embeddings for search, products for lookup, an empty order ledger |
 | `store.py` | The three tools over the feature store, and the `in_evaluation()` guard on the order write |
 | `shopping_agent.py` | The LangGraph agent (`create_react_agent`) served by `AgentApp`, text and image input |
+| `shopping_agent_openai.py` | The same agent on the OpenAI Agents SDK: the store's functions as `function_tool`s |
+| `prompts.py` | The prompt both entry points use |
 | `requirements.txt` | Deployment requirements |
 | `evaluation/` | The recipe's evaluation cases as Hopsworks suites, plus two the website made hard to test |
 
@@ -48,6 +50,13 @@ The recipe fetched the catalogue from Google Drive, where the files no longer
 resolve; the pipeline reads the same `items_shuffle_1000.json` from a Hugging
 Face mirror (set `WEBSHOP_ITEMS` to a local copy to skip the download). The
 data has no review text, only a rating and a count, so "Reviews" is the rating.
+
+## Two entry points
+
+`shopping_agent.py` runs the agent on LangGraph, `shopping_agent_openai.py` on the OpenAI Agents
+SDK. They share the store, the prompt and the feature groups; only the runtime differs. The
+OpenAI entry point runs on OpenAI's models by default (`OPENAI_API_KEY`), or on any LiteLLM
+model name in `WEBSHOP_OPENAI_MODEL`, e.g. `anthropic/claude-sonnet-4-5`.
 
 ## Deploy
 
