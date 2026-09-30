@@ -19,7 +19,8 @@ TOOLS = ("search_products", "product_details", "buy_now")
 
 STUBBED = (
     "hopsworks_agents", "hopsworks_agents.protocol", "hopsworks_agents.protocol.autoevents",
-    "hopsworks_agents.protocol.evaluation", "hopsworks", "pandas", "sentence_transformers",
+    "hopsworks_agents.protocol.evaluation", "hopsworks_agents.protocol.embeddings", "hopsworks", "pandas",
+    "sentence_transformers",
     "langchain_anthropic", "langchain_core", "langchain_core.tools", "langgraph", "langgraph.prebuilt",
 )
 

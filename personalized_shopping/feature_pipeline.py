@@ -33,23 +33,17 @@ import json
 import logging
 import os
 import re
-import tempfile
 import urllib.request
 
 import hopsworks
 import pandas as pd
+from hopsworks_agents.protocol.embeddings import (
+    load_sentence_transformer,
+    register_sentence_transformer,
+)
 from hsfs.embedding import EmbeddingIndex, SimilarityFunctionType
 from hsfs.feature import Feature
 
-HF_CACHE_DIR = (
-    os.environ.get("SENTENCE_TRANSFORMERS_HOME")
-    or os.environ.get("HF_HOME")
-    or os.path.join(tempfile.gettempdir(), "huggingface")
-)
-os.environ.setdefault("HF_HOME", HF_CACHE_DIR)
-os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", HF_CACHE_DIR)
-
-from sentence_transformers import SentenceTransformer  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -185,8 +179,14 @@ def main() -> None:
     now = pd.Timestamp.utcnow().tz_localize(None)
     frame["indexed_at"] = now
 
+    project = hopsworks.login()
+    fs = project.get_feature_store()
+
+    # the embedding model goes to the model registry once, here where there is internet;
+    # the agent loads it from there and never downloads it in the pod
+    register_sentence_transformer(EMBEDDING_MODEL, project=project)
     log.info("Embedding %d products (%s) …", len(frame), EMBEDDING_MODEL)
-    model = SentenceTransformer(EMBEDDING_MODEL, cache_folder=HF_CACHE_DIR)
+    model = load_sentence_transformer(EMBEDDING_MODEL, project=project)
     vectors = model.encode(
         [embedding_text(row) for _, row in frame.iterrows()],
         batch_size=BATCH_SIZE,
@@ -195,9 +195,6 @@ def main() -> None:
     )
     embeddings = frame[["asin", "title", "price_text", "category", "indexed_at"]].copy()
     embeddings["embedding"] = vectors.tolist()
-
-    project = hopsworks.login()
-    fs = project.get_feature_store()
 
     index = EmbeddingIndex()
     index.add_embedding(

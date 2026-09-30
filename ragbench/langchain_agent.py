@@ -39,7 +39,7 @@ from openinference.instrumentation.langchain import LangChainInstrumentor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk import trace as trace_sdk
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from sentence_transformers import SentenceTransformer
+from hopsworks_agents.protocol.embeddings import load_sentence_transformer
 from sqlalchemy import Column, Index, Integer, MetaData, String, Table, Text, create_engine
 
 logging.basicConfig(level=logging.INFO)
@@ -146,7 +146,7 @@ class RagbenchLCPredictor:
         log.info("Hopsworks connected. Feature group will be loaded on first query.")
 
         # ── embedding model ──────────────────────────────────────────────────
-        self._embed = SentenceTransformer(EMBEDDING_MODEL)
+        self._embed = load_sentence_transformer(EMBEDDING_MODEL, project=project)
 
         # ── sources accumulated across all tool calls within one query ───────
         self._current_sources: list[dict] = []

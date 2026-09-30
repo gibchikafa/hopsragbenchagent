@@ -37,7 +37,7 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk import trace as trace_sdk
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from sentence_transformers import SentenceTransformer
+from hopsworks_agents.protocol.embeddings import load_sentence_transformer
 from sqlalchemy import Column, Index, Integer, MetaData, String, Table, Text, create_engine
 from sqlalchemy.orm import Session
 
@@ -147,7 +147,7 @@ class RagbenchPredictor:
         log.info("MySQL chat store ready: %s@%s:%s/%s", user, host, port, db)
 
         # ── embedding model ──────────────────────────────────────────────────
-        self._embed = SentenceTransformer(EMBEDDING_MODEL)
+        self._embed = load_sentence_transformer(EMBEDDING_MODEL, project=project)
 
         # ── LLM ─────────────────────────────────────────────────────────────
         self._llm = Anthropic(

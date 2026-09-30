@@ -4,7 +4,7 @@ A RAG system built on the [vectara/open_ragbench](https://huggingface.co/dataset
 
 ## Architecture
 
-- **Feature pipeline** — downloads the RAGBench dataset, generates 384-dim embeddings using `all-MiniLM-L6-v2`, and stores them in a Hopsworks vector-search feature group (`ragbench_embeddings`).
+- **Feature pipeline** — downloads the RAGBench dataset, generates 384-dim embeddings using `all-MiniLM-L6-v2`, and stores them in a Hopsworks vector-search feature group (`ragbench_embeddings`). It also registers the embedding model in the project's model registry, once; the agents load it from there (`load_sentence_transformer`) instead of downloading it in the pod.
 - **LlamaIndex agent** — ReActAgent powered by Claude Haiku, queries the feature group for relevant passages, and answers questions.
 - **LangGraph agent** — equivalent agent built with LangGraph's `create_react_agent` and Claude Haiku.
 - Both agents expose a `/query` REST endpoint and persist multi-turn conversation history in MySQL.

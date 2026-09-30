@@ -18,26 +18,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 import uuid
 from datetime import datetime, timezone
 
 import hopsworks
 import pandas as pd
 from hopsworks_agents.protocol.autoevents import current_context
+from hopsworks_agents.protocol.embeddings import load_sentence_transformer
 from hopsworks_agents.protocol.evaluation import in_evaluation
 from langchain_core.tools import tool
 
-HF_CACHE_DIR = (
-    os.environ.get("SENTENCE_TRANSFORMERS_HOME")
-    or os.environ.get("HF_HOME")
-    or os.path.join(tempfile.gettempdir(), "huggingface")
-)
-os.environ.setdefault("HF_HOME", HF_CACHE_DIR)
-os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", HF_CACHE_DIR)
-
-from sentence_transformers import SentenceTransformer  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -53,8 +43,9 @@ MAX_DESCRIPTION_CHARS = 2500
 
 # ── data access ──────────────────────────────────────────────────────────────
 
-_embed = SentenceTransformer(EMBEDDING_MODEL, cache_folder=HF_CACHE_DIR)
 _project = hopsworks.login()
+# from the model registry, where the feature pipeline put it; never a download in the pod
+_embed = load_sentence_transformer(EMBEDDING_MODEL, project=_project)
 _fs = _project.get_feature_store()
 _embeddings_fg = None
 _embedding_features: list[str] = []

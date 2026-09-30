@@ -42,7 +42,7 @@ from hopsworks_agents.protocol import (  # noqa: E501
 from langchain_anthropic import ChatAnthropic
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
-from sentence_transformers import SentenceTransformer
+from hopsworks_agents.protocol.embeddings import load_sentence_transformer
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ is for.\
 
 project = hopsworks.login()
 fs = project.get_feature_store()
-embed = SentenceTransformer(EMBEDDING_MODEL)
+embed = load_sentence_transformer(EMBEDDING_MODEL, project=project)
 
 _fg = None
 _col_names: list[str] | None = None

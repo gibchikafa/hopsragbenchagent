@@ -64,6 +64,10 @@ model name in `WEBSHOP_OPENAI_MODEL`, e.g. `anthropic/claude-sonnet-4-5`.
 python feature_pipeline.py            # the catalogue, ~2 minutes with the download
 ```
 
+The pipeline also puts the embedding model (`all-MiniLM-L6-v2`) in the project's model
+registry, once. The agent loads it from there with `load_sentence_transformer`, so a serving
+pod never downloads it from the internet.
+
 The agent is two files, so deploy it git-backed and the repository comes along:
 
 ```python

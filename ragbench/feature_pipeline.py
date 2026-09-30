@@ -9,13 +9,15 @@ which avoids schema-detection failures caused by mixed text/image/table columns.
 import hashlib
 import json
 import logging
-import os
 
 import hopsworks
 import pandas as pd
 from hsfs.embedding import EmbeddingIndex, SimilarityFunctionType
 from huggingface_hub import hf_hub_download, list_repo_files
-from sentence_transformers import SentenceTransformer
+from hopsworks_agents.protocol.embeddings import (
+    load_sentence_transformer,
+    register_sentence_transformer,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -112,8 +114,11 @@ def main():
         raise RuntimeError("No text chunks extracted — check corpus structure.")
 
     # ── 2. generate embeddings ─────────────────────────────────────────────────
+    # registered once here, where there is internet; the agents load it from the registry
+    project = hopsworks.login()
+    register_sentence_transformer(EMBEDDING_MODEL, project=project)
     log.info("Loading embedding model: %s", EMBEDDING_MODEL)
-    embed_model = SentenceTransformer(EMBEDDING_MODEL)
+    embed_model = load_sentence_transformer(EMBEDDING_MODEL, project=project)
 
     texts = df["section_text"].tolist()
     log.info("Embedding %d chunks (batch_size=%d) …", len(texts), BATCH_SIZE)
@@ -123,7 +128,6 @@ def main():
     df["embedding"] = vecs.tolist()
 
     # ── 3. create / get feature group ─────────────────────────────────────────
-    project = hopsworks.login()
     fs = project.get_feature_store()
 
     emb_index = EmbeddingIndex()
