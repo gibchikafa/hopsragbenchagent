@@ -1,0 +1,114 @@
+[
+  {
+    "name": "Only the tools the step needs",
+    "description": "The tools and hand-offs the task names were called, and the ones it forbids were not. Planning never books; inspiration never plans.",
+    "checks": [
+      {
+        "type": "tool_call",
+        "name": "only_the_tools_needed"
+      }
+    ]
+  },
+  {
+    "name": "Tools in the recipe's order",
+    "description": "Inspiration before points of interest before the hand-off to planning; the four searches before the packing list; monitor, memorize, then day-of.",
+    "checks": [
+      {
+        "type": "tool_order",
+        "name": "tools_in_order"
+      }
+    ]
+  },
+  {
+    "name": "No tool errored",
+    "description": "Every agent-tool answered in its shape and every mock returned.",
+    "checks": [
+      {
+        "type": "no_tool_error",
+        "name": "no_tool_errored"
+      }
+    ]
+  },
+  {
+    "name": "Followed the concierge's flow",
+    "description": "Judges the exchange against the task's rubric: which agent had the conversation, what it did with its tools, and what it handed on. The recipe's own session transcripts are the rubrics.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "followed_the_flow",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "did_what_the_rubric_says": {
+            "weight": 2,
+            "description": "The agent did what the task's rubric describes, in that order, and did not do what it says must not happen yet."
+          },
+          "used_the_tools_not_itself": {
+            "weight": 1,
+            "description": "Destinations, points of interest, flights, hotels and briefings come from the tools' results, not from the agent's own knowledge; the reply presents what a tool returned."
+          },
+          "kept_it_brief": {
+            "weight": 1,
+            "description": "After a tool call the reply shows the result and asks the next question or offers the next step, rather than lecturing."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results",
+          "rubric"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "The conversation got there",
+    "description": "Judges the whole exchange: by the end, the state the rubric describes was reached, nothing was asked twice, and nothing was done without the traveler's word.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "the_conversation_got_there",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "reached_the_state": {
+            "weight": 2,
+            "description": "By the end of the conversation the agent reached what the task's rubric describes: the right agent has the conversation, the right things were stored, the right hand-offs happened."
+          },
+          "nothing_asked_twice": {
+            "weight": 1,
+            "description": "The agent did not ask for something the traveler had already given or that was in the itinerary or profile."
+          },
+          "nothing_unasked": {
+            "weight": 1,
+            "description": "No booking was made, no payment processed and no itinerary generated without the traveler's explicit go-ahead."
+          }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results",
+          "rubric"
+        ]
+      }
+    ]
+  }
+]
