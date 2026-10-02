@@ -1,7 +1,8 @@
 # Hopsworks agent examples
 
-Reference agents deployed on Hopsworks, each pairing a **feature pipeline** that
-writes an embedding feature group with an **agent deployment** that queries it.
+Reference agents deployed on Hopsworks. Most pair a **feature pipeline** that writes
+an embedding feature group with an **agent deployment** that queries it; a couple need
+no data at all.
 
 | Example | What it is |
 |---|---|
@@ -11,6 +12,7 @@ writes an embedding feature group with an **agent deployment** that queries it.
 | [`cyber_guardian/`](cyber_guardian/) | Google's [ADK cyber-guardian recipe](https://github.com/google/adk-recipes/tree/main/python/agents/cyber-guardian-agent) as a LangGraph workflow: triage, threat intel, investigation and playbook over keyed feature-store lookups, with disruptive actions held for approval. |
 | [`travel_concierge/`](travel_concierge/) | Google's [ADK travel-concierge recipe](https://github.com/google/adk-recipes/tree/main/python/agents/travel-concierge) on the OpenAI Agents SDK: seven agents handing a traveler to one another from inspiration to booking and through the trip, with working memory on Hopsworks. |
 | [`financial_advisor/`](financial_advisor/) | Google's [ADK financial-advisor recipe](https://github.com/google/adk-recipes/tree/main/python/agents/financial-advisor) on LangGraph: a coordinator calling four analysts in turn, with reports passed through the SDK's working memory. No feature pipeline; the data analyst searches the web. |
+| [`agent_memory/`](agent_memory/) | The memory service on its own: a small assistant that stores what you tell it, recalls it in your next conversation, searches what you said before, and prints what is in each tier when you ask. No feature pipeline, one file. |
 
 Each folder has its own README with deployment steps.
 

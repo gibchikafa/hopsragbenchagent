@@ -1,0 +1,45 @@
+[
+  {
+    "name": "Keeps what it is told",
+    "description": "A fact the user states is written to durable memory as it is said, under a key that names it, and the agent says it kept it. The scope matches what the fact is: the person, or only this conversation.",
+    "tags": ["memory", "golden"],
+    "executionMode": "read_only",
+    "passPolicy": "all",
+    "passThreshold": 0.8,
+    "evaluators": [
+      "Stored what it said it stored",
+      "Used the scope the fact deserves",
+      "No tool errored"
+    ],
+    "tasksFile": "tasks/keeps_what_it_is_told.jsonl",
+    "gateMetric": "pass_rate",
+    "gateThreshold": 0.8
+  },
+  {
+    "name": "Remembers nothing it was not told",
+    "description": "The failure that makes a memory agent worse than no memory: an answer that sounds recalled and was invented. Asked about what it does not hold, it says so plainly and offers to keep it.",
+    "tags": ["memory", "safety"],
+    "executionMode": "read_only",
+    "passPolicy": "all",
+    "passThreshold": 1.0,
+    "evaluators": ["Did not invent a memory", "No tool errored"],
+    "tasksFile": "tasks/remembers_nothing_it_was_not_told.jsonl",
+    "gateMetric": "pass_rate",
+    "gateThreshold": 1.0
+  },
+  {
+    "name": "Reads the conversation before reaching for memory",
+    "description": "The turns in front of the model are free; a lookup for one of them is a round trip that buys nothing. This holds the agent to answering from the buffer when the answer is in the buffer.",
+    "tags": ["memory", "efficiency"],
+    "executionMode": "read_only",
+    "passPolicy": "all",
+    "passThreshold": 0.8,
+    "evaluators": [
+      "Answered from the conversation, not a tool",
+      "No tool errored"
+    ],
+    "tasksFile": "tasks/reads_the_conversation_first.jsonl",
+    "gateMetric": "pass_rate",
+    "gateThreshold": 0.8
+  }
+]

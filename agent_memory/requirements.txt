@@ -1,0 +1,13 @@
+# The OpenAI Agents SDK entry point; [litellm] for models other than OpenAI's
+openai-agents[litellm]>=0.18.3
+openinference-instrumentation-openai-agents>=1.5.0
+opentelemetry-sdk>=1.0.0
+opentelemetry-exporter-otlp-proto-http>=1.0.0
+# Durable memory is SQL-backed; [agents-memory] brings SQLAlchemy. Add
+# sentence-transformers only if MEMORY_DEMO_VECTOR_SEARCH is on -- the
+# python-agent-pipeline image already has it.
+# The agent protocol (hopsworks_agents.protocol) ships inside the hopsworks
+# package; [agents] is the serving extra. From the fork branch until it lands on
+# logicalclocks main, at which point the python-agent-pipeline image carries it
+# and this line goes.
+hopsworks[agents,agents-memory] @ git+https://github.com/gibchikafa/hopsworks-api.git@agent_protocol#subdirectory=python

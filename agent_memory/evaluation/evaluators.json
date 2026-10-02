@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Stored what it said it stored",
+    "description": "A fact the user stated was written with `remember`, under a key that says what it is. Claiming to remember without the tool call is the failure this exists for: the sentence is not the storage.",
+    "checks": [
+      { "type": "tool_call", "name": "remembered_the_fact" }
+    ]
+  },
+  {
+    "name": "Did not invent a memory",
+    "description": "Nothing is reported as remembered that the user never said and no tool returned. Asked about something it does not hold, it says so and offers to keep it.",
+    "checks": [
+      { "type": "llm_judge", "name": "no_invented_memory" }
+    ]
+  },
+  {
+    "name": "Answered from the conversation, not a tool",
+    "description": "Something said a turn ago is answered from the turns the agent already has. Calling `recall` or `search` for it is a round trip for something already in front of the model.",
+    "checks": [
+      { "type": "no_unnecessary_tools", "name": "no_lookup_for_visible_turns" }
+    ]
+  },
+  {
+    "name": "Used the scope the fact deserves",
+    "description": "Durable things about the person go to user scope; what matters only in this chat goes to session scope. Promoting a passing detail to the person is what this catches.",
+    "checks": [
+      { "type": "tool_arguments_judge", "name": "scope_matches_the_fact" }
+    ]
+  },
+  {
+    "name": "No tool errored",
+    "description": "Every memory tool call returned; a failed write that the answer then claims as stored is the worst outcome here.",
+    "checks": [
+      { "type": "no_tool_error", "name": "no_tool_error" }
+    ]
+  }
+]
