@@ -161,3 +161,136 @@ def test_the_prompt_forbids_inventing_and_claiming(stubbed):
     assert "Never claim to have stored something you did not" in prompts.SYSTEM_PROMPT
     # the session-scope rule is what the evaluation suite holds it to
     assert "scope='session'" in prompts.SYSTEM_PROMPT
+
+
+# ── the job that deploys the agent and talks to it ───────────────────────────
+
+
+class FakeReply:
+    def __init__(self, text, conversation_id):
+        self.text, self.conversation_id = text, conversation_id
+
+
+class FakeAgent:
+    """An agent that answers from a script and records what it was asked."""
+
+    name = "memorydemo"
+    url = "https://gateway/v1/ns/memorydemo"
+
+    def __init__(self, answers):
+        self.answers = list(answers)
+        self.asked: list[tuple[str, str | None, str | None]] = []
+        self.started = self.stopped = 0
+        self.running = False
+        self.deployment = mock.MagicMock()
+        self.deployment.predictor.env_vars = {}
+
+    def chat(self, text, conversation_id=None, subject=None, timeout=None):
+        self.asked.append((text, conversation_id, subject))
+        answer = self.answers.pop(0) if self.answers else "ok"
+        return FakeReply(answer, conversation_id or f"conv-{len(self.asked)}")
+
+    def is_running(self):
+        return self.running
+
+    def start(self, await_running=None):
+        self.started += 1
+        self.running = True
+
+    def stop(self):
+        self.stopped += 1
+
+    def _agent_get(self, path):
+        return {
+            "messages": [{"role": "user", "content": "hi"}],
+            "summary": "Dana lives in Oslo and is vegetarian.",
+            "summarized_through": 4,
+            "subject": "dana@example.com",
+        }
+
+
+ANSWERS = [
+    "Noted: Oslo, vegetarian.",          # the facts
+    "Holding that for this chat.",       # session note
+    "The 14-inch and the 16-inch.",      # from the buffer
+    "Try a lentil stew.",
+    "It keeps well for lunch.",
+    "Try fårikål, without the lamb.",
+    "You live in Oslo and you're vegetarian.",   # across conversations
+    "I don't have any laptop sizes for you.",    # session note did not cross
+    "Forgotten.",
+    "I don't know where you live.",
+]
+
+
+@pytest.fixture
+def job(stubbed, monkeypatch):
+    sys.modules.pop("demo_job", None)
+    import demo_job  # noqa: PLC0415
+
+    agent = FakeAgent(ANSWERS)
+    serving = types.SimpleNamespace(
+        get_agent=lambda name: None,
+        deploy_agent=mock.MagicMock(return_value=agent),
+    )
+    hopsworks = types.ModuleType("hopsworks")
+    hopsworks.login = lambda project=None: types.SimpleNamespace(
+        get_agent_serving=lambda: serving
+    )
+    hopsworks.get_secrets_api = lambda: types.SimpleNamespace(
+        get=lambda name: "sk-from-secret"
+    )
+    monkeypatch.setitem(sys.modules, "hopsworks", hopsworks)
+    monkeypatch.setenv("HOPSWORKS_API_KEY", "key")
+    monkeypatch.setattr(demo_job.Path, "exists", lambda self: True)
+    return demo_job, agent, serving
+
+
+def test_the_job_deploys_starts_and_holds_two_conversations(job, monkeypatch, capsys):
+    demo_job, agent, serving = job
+    monkeypatch.setattr(sys, "argv", ["demo_job.py"])
+    demo_job.main()
+
+    assert serving.deploy_agent.call_count == 1
+    assert agent.started == 1 and agent.stopped == 0
+    # the model key is lifted from the project secret onto the deployment
+    assert agent.deployment.predictor.env_vars["OPENAI_API_KEY"] == "sk-from-secret"
+
+    conversations = {cid for _text, cid, _subject in agent.asked if cid}
+    # the second conversation is a different one: that is what makes tier 3 visible
+    assert len(conversations) == 2
+    # and both are with the same person, which is what carries memory between them
+    assert {subject for _t, _c, subject in agent.asked} == {"dana@example.com"}
+
+    out = capsys.readouterr().out
+    assert "5 of 5 checks held" in out
+    # the deterministic view of the tiers, not the model's own account of them
+    assert "rolling summary (covers through 4)" in out
+
+
+def test_a_tier_that_did_not_work_is_reported_and_can_fail_the_job(job, monkeypatch):
+    demo_job, agent, _serving = job
+    # the session note leaks into the second conversation, and the fact is not forgotten
+    agent.answers = list(ANSWERS)
+    agent.answers[7] = "You were comparing the 14-inch and the 16-inch."
+    agent.answers[9] = "You live in Oslo."
+    monkeypatch.setattr(sys, "argv", ["demo_job.py", "--strict"])
+
+    with pytest.raises(SystemExit) as exit_info:
+        demo_job.main()
+    assert "2 of 5 checks" in str(exit_info.value)
+
+
+def test_skip_deploy_needs_an_agent_that_exists(job, monkeypatch):
+    demo_job, _agent, _serving = job
+    monkeypatch.setattr(sys, "argv", ["demo_job.py", "--skip-deploy"])
+    with pytest.raises(SystemExit) as exit_info:
+        demo_job.main()
+    assert "memorydemo" in str(exit_info.value)
+
+
+def test_stop_leaves_nothing_running(job, monkeypatch):
+    demo_job, agent, _serving = job
+    monkeypatch.setattr(sys, "argv", ["demo_job.py", "--stop"])
+    demo_job.main()
+    assert agent.stopped == 1

@@ -13,6 +13,7 @@ No feature store, no data pipeline, one file to deploy.
 |---|---|
 | `memory_agent.py` | The agent: the SDK's memory tools on an OpenAI Agents SDK loop, served by `AgentApp` |
 | `prompts.py` | The prompt, including the two rules the evaluation suites hold it to |
+| `demo_job.py` | Deploys the agent and talks to it, as a Hopsworks job: the job log is the demonstration |
 | `requirements.txt` | Deployment requirements |
 | `evaluation/` | Three suites: what it stored, what it must never invent, and when not to look things up |
 
@@ -39,7 +40,46 @@ Two scopes matter. `remember` defaults to `user` scope, keyed by `ctx.subject`, 
 outlives the conversation. `scope='session'` is for working notes that should not
 follow someone around: what they are shopping for today is not who they are.
 
-## Try it
+## Run it as a job
+
+`demo_job.py` does the whole demonstration in one run: it deploys the agent, waits for
+it to answer, then holds two conversations as the same person and prints what memory
+did between them. The job's log is the demo.
+
+```bash
+python demo_job.py                 # deploy, start, run the script
+python demo_job.py --skip-deploy   # talk to an agent that is already up
+python demo_job.py --strict        # exit 1 if a tier did not do its job
+```
+
+Create it as a job with `python-agent-pipeline` as the environment. Upload
+`demo_job.py` alongside `memory_agent.py`, `prompts.py` and `requirements.txt`, or
+upload only the script and pass `--git-url` so the deployment pulls the agent from the
+repository.
+
+It ends with a line per tier, so a failure says which one:
+
+```
+  [ok] buffer answered from this conversation
+  [ok] older turns folded into a rolling summary
+  [ok] a durable fact crossed into a new conversation
+  [ok] the session note did not cross
+  [ok] the forgotten fact is gone
+```
+
+The second conversation is the one worth reading. It is a new `conversation_id` with no
+shared history, so anything the agent still knows came from durable memory, and anything
+it has correctly lost was session-scoped. Between the turns the script reads the
+server's own view of the conversation, `/v1/conversations/{id}/messages`, which carries
+the rolling summary and how far it reaches. That view does not go through a language
+model, so it is evidence rather than the agent's account of itself.
+
+The model key comes from the project's secret store: the script copies the secret named
+by `--model-secret` (default `OPENAI_API_KEY`) onto the deployment, so the key stays in
+the secret store and the pod can still reach a model. Pass `--model-secret ''` to skip
+that if the deployment already has one.
+
+## Try it by hand
 
 Say these in order, in one chat, then start a second chat and ask the last one again:
 
