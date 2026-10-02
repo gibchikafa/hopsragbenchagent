@@ -209,6 +209,10 @@ class FakeAgent:
         }
 
 
+# the canned answers below are written for this persona, so the checks line up
+PINNED = ["demo_job.py", "--persona", "Dana", "--city", "Oslo",
+          "--subject", "dana@example.com"]
+
 ANSWERS = [
     "Noted: Oslo, vegetarian.",          # the facts
     "Holding that for this chat.",       # session note
@@ -248,7 +252,7 @@ def job(stubbed, monkeypatch):
 
 def test_the_job_deploys_starts_and_holds_two_conversations(job, monkeypatch, capsys):
     demo_job, agent, serving = job
-    monkeypatch.setattr(sys, "argv", ["demo_job.py"])
+    monkeypatch.setattr(sys, "argv", PINNED)
     demo_job.main()
 
     assert serving.deploy_agent.call_count == 1
@@ -274,7 +278,7 @@ def test_a_tier_that_did_not_work_is_reported_and_can_fail_the_job(job, monkeypa
     agent.answers = list(ANSWERS)
     agent.answers[7] = "You were comparing the 14-inch and the 16-inch."
     agent.answers[9] = "You live in Oslo."
-    monkeypatch.setattr(sys, "argv", ["demo_job.py", "--strict"])
+    monkeypatch.setattr(sys, "argv", [*PINNED, "--strict"])
 
     with pytest.raises(SystemExit) as exit_info:
         demo_job.main()
@@ -283,14 +287,38 @@ def test_a_tier_that_did_not_work_is_reported_and_can_fail_the_job(job, monkeypa
 
 def test_skip_deploy_needs_an_agent_that_exists(job, monkeypatch):
     demo_job, _agent, _serving = job
-    monkeypatch.setattr(sys, "argv", ["demo_job.py", "--skip-deploy"])
+    monkeypatch.setattr(sys, "argv", [*PINNED, "--skip-deploy"])
     with pytest.raises(SystemExit) as exit_info:
         demo_job.main()
     assert "memorydemo" in str(exit_info.value)
 
 
+def test_each_run_is_a_person_the_agent_has_never_met(job, monkeypatch):
+    demo_job, agent, _serving = job
+    # unpinned: the persona and the subject it is derived from are fresh, so a
+    # later run cannot pass the cross-conversation check on an earlier one's facts
+    monkeypatch.setattr(sys, "argv", ["demo_job.py"])
+    demo_job.main()
+    first = {s for _t, _c, s in agent.asked}
+
+    agent.answers, agent.asked = list(ANSWERS), []
+    demo_job.main()
+    second = {s for _t, _c, s in agent.asked}
+
+    assert len(first) == len(second) == 1
+    assert first != second
+    assert all(s.endswith("@example.com") for s in first | second)
+
+
+def test_a_pinned_persona_keeps_the_same_subject(job, monkeypatch):
+    demo_job, agent, _serving = job
+    monkeypatch.setattr(sys, "argv", PINNED)
+    demo_job.main()
+    assert {s for _t, _c, s in agent.asked} == {"dana@example.com"}
+
+
 def test_stop_leaves_nothing_running(job, monkeypatch):
     demo_job, agent, _serving = job
-    monkeypatch.setattr(sys, "argv", ["demo_job.py", "--stop"])
+    monkeypatch.setattr(sys, "argv", [*PINNED, "--stop"])
     demo_job.main()
     assert agent.stopped == 1

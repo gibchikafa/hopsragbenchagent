@@ -18,7 +18,13 @@ What the two conversations show, in order:
    messages it covers.
 3. **Durable memory, across conversations.** The second conversation is new --
    a different `conversation_id`, no shared history -- but the same `subject`,
-   so what Dana said about herself is still there.
+   so what the person said about themselves is still there.
+
+   Who that person is is random per run, and the subject is derived from the
+   name with a unique suffix, so every run meets the agent as a stranger. With
+   a fixed subject this check would pass on facts an earlier run stored, which
+   is a check that cannot fail. `--persona` and `--subject` pin it when
+   surviving across runs is the thing you want to show.
 4. **Session scope staying put.** The working note from the first conversation
    is *not* in the second. That is the line between "who this person is" and
    "what they happened to be doing", and it is the one worth seeing.
@@ -40,13 +46,26 @@ from __future__ import annotations
 
 import argparse
 import os
+import random
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_SUBJECT = "dana@example.com"
+
+#: Who the run is about. Random by default, and the subject is derived from it
+#: with a unique suffix, so each run meets the agent as a person it has never
+#: heard of. That matters: durable memory is keyed by the subject, so a fixed
+#: one would mean the second run's "a durable fact crossed into a new
+#: conversation" passed on facts the *previous* run stored -- a check that
+#: cannot fail is not evidence. Pin `--persona` and `--subject` to demonstrate
+#: the opposite, memory surviving across runs.
+PERSONAS = ("Dana", "Mateo", "Ingrid", "Yusuf", "Priya", "Noah",
+            "Alma", "Tomas", "Rin", "Sofia", "Jonas", "Leila")
+CITIES = ("Oslo", "Lisbon", "Nairobi", "Dublin", "Bergen", "Helsinki",
+          "Porto", "Tallinn", "Seville", "Toronto", "Galway", "Gdansk")
 
 
 # ── printing, because the job log is the product ─────────────────────────────
@@ -211,8 +230,14 @@ def main() -> None:
     parser.add_argument("--git-provider", default="GitHub")
     parser.add_argument("--git-branch", default="main")
     parser.add_argument("--project", default=None)
-    parser.add_argument("--subject", default=DEFAULT_SUBJECT,
-                        help="who the conversations are with; durable memory is keyed by it")
+    parser.add_argument("--persona", default=None,
+                        help="the person the run is about; a random one when omitted")
+    parser.add_argument("--city", default=None,
+                        help="where they live, the durable fact the run follows; random when omitted")
+    parser.add_argument("--subject", default=None,
+                        help="who the conversations are with; durable memory is keyed by it. "
+                             "Derived from the persona and unique per run unless you pin it, "
+                             "which is how you show memory surviving across runs.")
     parser.add_argument("--model-secret", default="OPENAI_API_KEY",
                         help="project secret holding the model key; '' to skip")
     parser.add_argument("--model-env", default="OPENAI_API_KEY",
@@ -242,13 +267,19 @@ def main() -> None:
     ensure_running(agent, args.timeout)
     print(f"\n  {agent.name} at {agent.url}", flush=True)
 
-    subject = args.subject
+    persona = args.persona or random.choice(PERSONAS)
+    city = args.city or random.choice(CITIES)
+    # unique even when the same persona comes up twice
+    subject = args.subject or f"{persona.lower()}.{uuid.uuid4().hex[:8]}@example.com"
     chat = lambda text, cid: say(  # noqa: E731 - one short partial, used ten times
         agent, text, subject=subject, conversation_id=cid, timeout=args.reply_timeout
     )
 
     step(2, "First conversation: tell it things")
-    answer, first = chat("I'm Dana, I live in Oslo and I'm vegetarian.", None)
+    print(f"  This run is {persona}, from {city}, filed under {subject}.", flush=True)
+    answer, first = chat(
+        f"I'm {persona}, I live in {city} and I'm vegetarian.", None
+    )
     chat("Just for now, I'm comparing the 14-inch and the 16-inch laptop.", first)
     buffer_answer, _ = chat("Remind me which two sizes I'm comparing?", first)
     report_state(agent, first, "after three turns")
@@ -280,10 +311,11 @@ def main() -> None:
          "14" in buffer_answer or "16" in buffer_answer, buffer_answer),
         ("older turns folded into a rolling summary", bool(summary), summary),
         ("a durable fact crossed into a new conversation",
-         "oslo" in across.lower() or "vegetarian" in across.lower(), across),
+         city.lower() in across.lower() or "vegetarian" in across.lower(), across),
         ("the session note did not cross",
          "14" not in session_leak and "16" not in session_leak, session_leak),
-        ("the forgotten fact is gone", "oslo" not in after_forget.lower(), after_forget),
+        ("the forgotten fact is gone",
+         city.lower() not in after_forget.lower(), after_forget),
     ]
     failed = 0
     for label, ok, evidence in checks:

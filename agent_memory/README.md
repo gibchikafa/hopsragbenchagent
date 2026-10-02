@@ -67,6 +67,13 @@ It ends with a line per tier, so a failure says which one:
   [ok] the forgotten fact is gone
 ```
 
+Each run is about a random person, and the subject durable memory is keyed by is derived
+from that name with a unique suffix, so every run meets the agent as a stranger. That is
+what keeps the run honest: with a fixed subject, "a durable fact crossed into a new
+conversation" would pass on facts an earlier run had stored, and a check that cannot fail
+is not evidence. Pin `--persona`, `--city` and `--subject` when what you want to show is
+the opposite, memory surviving across runs.
+
 The second conversation is the one worth reading. It is a new `conversation_id` with no
 shared history, so anything the agent still knows came from durable memory, and anything
 it has correctly lost was session-scoped. Between the turns the script reads the
@@ -83,7 +90,7 @@ that if the deployment already has one.
 
 Say these in order, in one chat, then start a second chat and ask the last one again:
 
-1. `I'm Dana, I live in Oslo and I'm vegetarian.` — watch the `remember` chip appear.
+1. `I'm Dana, I live in Oslo and I'm vegetarian.` — watch the `remember` chip appear. (The job script picks a random name and city instead, so each run is a new person.)
 2. `Just for now: I'm comparing the 14-inch and the 16-inch.` — session scope, not user.
 3. `Show me what's in each memory tier.` — `memory_report` prints all three.
 4. Six or so messages in, ask again: the summary tier is no longer empty.
