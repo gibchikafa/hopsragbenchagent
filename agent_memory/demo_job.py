@@ -11,12 +11,12 @@ same person and prints what memory did between them.
 
 What the two conversations show, in order:
 
-1. **The buffer.** Something said a turn ago is answered from the turn before,
-   with no lookup.
-2. **The summary.** The demo folds after six messages, so by the end of the
-   first conversation the server holds a rolling summary and says which
+1. **Working memory.** Something said a turn ago is answered from the turn
+   before, with no lookup.
+2. **Short-term memory.** The demo folds after six messages, so by the end of
+   the first conversation the server holds a rolling summary and says which
    messages it covers.
-3. **Durable memory, across conversations.** The second conversation is new --
+3. **Long-term memory, across conversations.** The second conversation is new --
    a different `conversation_id`, no shared history -- but the same `subject`,
    so what the person said about themselves is still there.
 
@@ -25,7 +25,7 @@ What the two conversations show, in order:
    a fixed subject this check would pass on facts an earlier run stored, which
    is a check that cannot fail. `--persona` and `--subject` pin it when
    surviving across runs is the thing you want to show.
-4. **Session scope staying put.** The working note from the first conversation
+4. **Short-term notes staying put.** The session-scoped note from the first conversation
    is *not* in the second. That is the line between "who this person is" and
    "what they happened to be doing", and it is the one worth seeing.
 5. **Forgetting.** A fact deleted on request is gone from the next answer.
@@ -57,8 +57,8 @@ HERE = Path(__file__).resolve().parent
 
 #: Who the run is about. Random by default, and the subject is derived from it
 #: with a unique suffix, so each run meets the agent as a person it has never
-#: heard of. That matters: durable memory is keyed by the subject, so a fixed
-#: one would mean the second run's "a durable fact crossed into a new
+#: heard of. That matters: long-term memory is keyed by the subject, so a fixed
+#: one would mean the second run's "a fact in long-term memory crossed into a new
 #: conversation" passed on facts the *previous* run stored -- a check that
 #: cannot fail is not evidence. Pin `--persona` and `--subject` to demonstrate
 #: the opposite, memory surviving across runs.
@@ -84,7 +84,8 @@ def conversation_state(agent: Any, conversation_id: str) -> dict[str, Any]:
     """What the server holds for a conversation: messages, summary, subject.
 
     The agent protocol serves this at `/v1/conversations/{id}/messages` for any
-    agent with memory configured. It is the honest view of tiers 1 and 2 --
+    agent with memory configured. It is the honest view of working and
+    short-term memory --
     `summary` is the folded part and `summarized_through` marks where the
     transcript and what the model actually reads diverge -- and unlike asking
     the agent what it remembers, it does not go through a language model. The
@@ -108,11 +109,11 @@ def report_state(agent: Any, conversation_id: str, label: str) -> dict[str, Any]
     )
     if summary:
         through = state.get("summarized_through")
-        print(f"  -- rolling summary (covers through {through}):", flush=True)
+        print(f"  -- short-term memory, summary covers through {through}:", flush=True)
         for line in str(summary).splitlines():
             print(f"       {line}", flush=True)
     else:
-        print("  -- rolling summary: nothing folded yet", flush=True)
+        print("  -- short-term memory: nothing folded yet", flush=True)
     return state
 
 
@@ -233,9 +234,9 @@ def main() -> None:
     parser.add_argument("--persona", default=None,
                         help="the person the run is about; a random one when omitted")
     parser.add_argument("--city", default=None,
-                        help="where they live, the durable fact the run follows; random when omitted")
+                        help="where they live, the long-term fact the run follows; random when omitted")
     parser.add_argument("--subject", default=None,
-                        help="who the conversations are with; durable memory is keyed by it. "
+                        help="who the conversations are with; long-term memory is keyed by it. "
                              "Derived from the persona and unique per run unless you pin it, "
                              "which is how you show memory surviving across runs.")
     parser.add_argument("--model-secret", default="OPENAI_API_KEY",
@@ -295,7 +296,7 @@ def main() -> None:
     summary = str(state.get("summary") or "")
 
     step(4, "A new conversation, the same person")
-    print("  New conversation id, no shared history: only durable memory can carry "
+    print("  New conversation id, no shared history: only long-term memory can carry "
           "anything across.", flush=True)
     across, second = chat("What do you remember about me?", None)
     session_leak, _ = chat("What laptop sizes was I comparing?", second)
@@ -307,10 +308,10 @@ def main() -> None:
 
     step(6, "What each tier did")
     checks = [
-        ("buffer answered from this conversation",
+        ("working memory answered from this conversation",
          "14" in buffer_answer or "16" in buffer_answer, buffer_answer),
-        ("older turns folded into a rolling summary", bool(summary), summary),
-        ("a durable fact crossed into a new conversation",
+        ("older turns folded into short-term memory", bool(summary), summary),
+        ("a fact in long-term memory crossed into a new conversation",
          city.lower() in across.lower() or "vegetarian" in across.lower(), across),
         ("the session note did not cross",
          "14" not in session_leak and "16" not in session_leak, session_leak),

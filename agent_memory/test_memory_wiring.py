@@ -83,10 +83,10 @@ def test_all_three_tiers_are_configured(stubbed):
     import memory_agent  # noqa: PLC0415
 
     memory = memory_agent.agent_app.memory
-    # tier 2 and tier 3; tier 1 is the buffer and needs nothing
+    # short-term and long-term memory; working memory needs nothing
     assert memory.summarize is not None
     assert memory.long_term is True
-    # folded early on purpose, so the summary tier shows up inside a demo chat
+    # folded early on purpose, so short-term memory shows up inside a demo chat
     assert memory.summarize_after_messages < 20
     assert memory.keep_recent_messages < memory.summarize_after_messages
     # vector search is off by default: no embedding model, no feature group
@@ -122,13 +122,13 @@ def test_memory_report_reads_the_tiers(stubbed):
 
     report = json.loads(memory_agent.memory_report.fn())
     assert report["who_you_are_talking_to"]["subject"] == "dana@example.com"
-    assert report["tier_1_conversation_buffer"]["turns_held"] == 1
-    assert report["tier_2_rolling_summary"] == "Dana introduced herself."
-    assert report["tier_3_durable_memory"] == {
-        "about_this_person": {"home_city": "Oslo"},
-        "this_conversation_only": {"comparing": "laptops"},
+    assert report["working_memory"]["turns_held"] == 1
+    assert report["short_term_memory"] == {
+        "summary_of_older_turns": "Dana introduced herself.",
+        "notes_for_this_conversation": {"comparing": "laptops"},
     }
-    assert report["search_mode"] == "keyword"
+    assert report["semantic_memory"] == {"facts_about_this_person": {"home_city": "Oslo"}}
+    assert report["episodic_memory"]["search_mode"] == "keyword"
 
 
 def test_memory_report_says_so_when_there_is_no_memory(stubbed):
@@ -148,10 +148,10 @@ def test_nothing_folded_yet_is_said_not_shown_as_null(stubbed):
     memory_agent.current_context.get = lambda default=None: ctx
 
     report = json.loads(memory_agent.memory_report.fn())
-    assert report["tier_2_rolling_summary"] == "nothing folded yet"
-    # nobody has identified themselves, so durable facts stay with the chat
+    assert report["short_term_memory"]["summary_of_older_turns"] == "nothing folded yet"
+    # nobody has identified themselves, so long-term facts stay with the chat
     assert report["who_you_are_talking_to"]["known_from"] == "conversation"
-    assert report["tier_1_conversation_buffer"]["oldest_turn_held"] is None
+    assert report["working_memory"]["oldest_turn_held"] is None
 
 
 def test_the_prompt_forbids_inventing_and_claiming(stubbed):
@@ -261,7 +261,7 @@ def test_the_job_deploys_starts_and_holds_two_conversations(job, monkeypatch, ca
     assert agent.deployment.predictor.env_vars["OPENAI_API_KEY"] == "sk-from-secret"
 
     conversations = {cid for _text, cid, _subject in agent.asked if cid}
-    # the second conversation is a different one: that is what makes tier 3 visible
+    # the second conversation is a different one: that is what makes long-term visible
     assert len(conversations) == 2
     # and both are with the same person, which is what carries memory between them
     assert {subject for _t, _c, subject in agent.asked} == {"dana@example.com"}
@@ -269,7 +269,7 @@ def test_the_job_deploys_starts_and_holds_two_conversations(job, monkeypatch, ca
     out = capsys.readouterr().out
     assert "5 of 5 checks held" in out
     # the deterministic view of the tiers, not the model's own account of them
-    assert "rolling summary (covers through 4)" in out
+    assert "short-term memory, summary covers through 4" in out
 
 
 def test_a_tier_that_did_not_work_is_reported_and_can_fail_the_job(job, monkeypatch):
