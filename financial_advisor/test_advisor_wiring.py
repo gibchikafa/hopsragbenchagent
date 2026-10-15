@@ -31,9 +31,15 @@ def stubbed(monkeypatch):
         monkeypatch.setitem(sys.modules, name, module)
     # `tool` returns the function, so the analysts stay plain coroutines here
     sys.modules["langchain_core.tools"].tool = lambda fn: fn
+    # fixed doubles rather than a fresh mock per attribute lookup, so a test can ask
+    # what the agent asked for
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    protocol.memory_tools = mock.MagicMock(return_value=[])
+    protocol.identity_tools = mock.MagicMock(return_value=[])
+    protocol.ManagedMemoryService = mock.MagicMock()
     sys.modules["langgraph.prebuilt"].create_react_agent = lambda llm, tools: {"tools": tools}
     monkeypatch.syspath_prepend(__file__.rsplit("/", 1)[0])
-    for name in ("advisor_agent", "prompts"):
+    for name in ("advisor_agent", "prompts", "demo_users"):
         sys.modules.pop(name, None)
     yield
 
@@ -145,3 +151,34 @@ def test_the_openai_variant_has_the_four_analysts_on_the_coordinator(openai_stub
     import advisor_memory  # noqa: PLC0415
 
     assert o.mem is advisor_memory
+
+
+def test_the_coordinator_can_identify_and_remember(stubbed):
+    """The memory tools and `identify` are registered, and the store keeps facts.
+
+    Without `identify` the agent's memory is keyed by the conversation, so everything it
+    learns dies with it; without long_term there is nothing to key.
+    """
+    import advisor_agent  # noqa: PLC0415
+
+    # through sys.modules, not an import: `import a.b as c` would take the parent
+    # stub's __getattr__ and hand back a fresh mock that never saw the call
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    assert protocol.memory_tools.call_args.args == ("langgraph",)
+    assert protocol.identity_tools.call_args.args == ("langgraph",)
+    assert protocol.ManagedMemoryService.call_args.kwargs["long_term"] is True
+    assert advisor_agent.agent_app is not None
+
+
+def test_the_prompt_asks_who_is_there_before_advising(stubbed):
+    import demo_users  # noqa: PLC0415
+    import prompts  # noqa: PLC0415
+
+    assert demo_users.IDENTITY_INSTRUCTIONS in prompts.COORDINATOR_PROMPT
+    # the demo's people are in the prompt, so the agent can offer them
+    for user in demo_users.USERS:
+        assert user["id"] in prompts.COORDINATOR_PROMPT
+    # and asked for before the introduction, not after
+    assert prompts.COORDINATOR_PROMPT.index(demo_users.USERS[0]["id"]) < prompts.COORDINATOR_PROMPT.index(
+        prompts.DISCLAIMER
+    )

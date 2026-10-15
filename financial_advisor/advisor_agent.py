@@ -44,6 +44,8 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
+    identity_tools,
+    memory_tools,
     anthropic_summarizer,
 )
 from langchain_anthropic import ChatAnthropic
@@ -214,9 +216,16 @@ async def assess_risk() -> str:
 # ── the coordinator ──────────────────────────────────────────────────────────
 
 ANALYSTS = [analyze_market, propose_strategies, plan_execution, assess_risk]
+# The memory tools the model calls itself, and `identify`, which says whose memory this
+# is: until it is called, what the agent remembers belongs to the conversation alone.
+COORDINATOR_TOOLS = [
+    *ANALYSTS,
+    *memory_tools("langgraph"),
+    *identity_tools("langgraph"),
+]
 coordinator = create_react_agent(
     ChatAnthropic(model=MODEL, max_tokens=8192, temperature=0.0),
-    ANALYSTS,
+    COORDINATOR_TOOLS,
 )
 
 # What the chat panel's Graph tab shows. The compiled graph would draw
@@ -255,15 +264,16 @@ agent_app = AgentApp(
     framework="langgraph",
     welcome_message="Hello! I'm here to help you navigate the world of financial "
     "decision-making, one step at a time: a ticker, strategies for your profile, an "
-    "execution plan, and the risks. Ready to get started?",
+    "execution plan, and the risks. Who am I speaking with?",
     suggested_prompts=[
-        "Hello. What can you do for me?",
+        "I'm Dana.",
         "Analyze NVDA for me.",
         "I'm a conservative, long-term investor. What strategies fit MSFT?",
     ],
     placeholder="A ticker to analyze, or the next step...",
     memory=ManagedMemoryService(
         summarize=anthropic_summarizer(),
+        long_term=True,
         max_state_value_chars=MAX_REPORT_CHARS,
     ),
     tool_events=True,

@@ -48,6 +48,17 @@ on the OpenAI Agents SDK with OpenAI's models and the SDK's `WebSearchTool` (`OP
 or any LiteLLM model name in `ADVISOR_OPENAI_MODEL`. Both keep the reports in the same
 working-memory keys, so either can continue a plan the other started.
 
+## Who it is talking to
+
+The advisor asks who is there before it introduces itself, and calls `identify` with the
+address it matches. `demo_users.py` is the list it offers, because a demo has no login to
+read an identity from; nothing checks the names.
+
+That first question is what makes the rest of the memory work: `remember` and `recall` are
+keyed by the subject, so until someone has identified themselves a risk attitude learned
+today belongs to the conversation and is lost with it. Say you are Dana in a second
+conversation and the advisor starts from what it already knows.
+
 ## Deploy
 
 ```bash

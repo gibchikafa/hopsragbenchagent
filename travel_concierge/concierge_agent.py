@@ -39,8 +39,12 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
+    identity_tools,
+    memory_tools,
     openai_summarizer,
 )
+
+import demo_users
 from openai.types.responses import ResponseTextDeltaEvent
 
 import memory
@@ -85,7 +89,10 @@ def _instructions(agent_name: str):
 
 def _root_instructions(_ctx, _agent) -> str:
     values = memory.prompt_context()
-    return (PERSONA + "\n\n" + ROOT_AGENT_INSTR.format(itinerary_summary=memory.itinerary_summary())
+    # The traveller first: `user` scope is keyed by who this is, so the preferences the
+    # post-trip agent learns have nowhere to go until the concierge has asked.
+    return (PERSONA + "\n\n" + demo_users.IDENTITY_INSTRUCTIONS + "\n\n"
+            + ROOT_AGENT_INSTR.format(itinerary_summary=memory.itinerary_summary())
             + CONTEXT_BLOCK.format(**values))
 
 
@@ -104,6 +111,9 @@ root_agent = Agent(
     name="root_agent",
     handoff_description="The concierge itself: routes the traveler to the right agent.",
     instructions=_root_instructions,
+    # the memory tools the model calls itself, and `identify`, which says whose memory
+    # this is: the sub-agents inherit the subject through the conversation
+    tools=[*memory_tools("openai_agents"), *identity_tools("openai_agents")],
     handoffs=list(SUB_AGENTS.values()),
     model_settings=ModelSettings(temperature=0.0),
     **_model_kwargs(),
@@ -146,9 +156,10 @@ agent_app = AgentApp(
     "in-trip and post-trip support, handing the conversation to one another (OpenAI Agents SDK; "
     "working memory on Hopsworks).",
     framework="openai_agents",
-    welcome_message="Hello! I'm your travel concierge. Looking for inspiration, ready to plan a trip, "
-    "or already booked and want help before, during or after it?",
+    welcome_message="Hello! I'm your travel concierge. Who am I travelling with? Then: "
+    "inspiration, a trip to plan, or one already booked?",
     suggested_prompts=[
+        "I'm Priya.",
         "Inspire me about the Americas",
         "Find flights to London from JFK on April 20th for 4 days. Pick any flights and seats, any hotel and room, without my input; confirm with me before generating an itinerary.",
         "transfer to pre_trip",

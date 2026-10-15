@@ -48,8 +48,14 @@ def stubbed(monkeypatch):
     agents.ModelSettings = lambda **kw: kw
     agents.RunConfig = lambda **kw: kw
     agents.WebSearchTool = lambda: "web_search"
+    # fixed doubles rather than a fresh mock per attribute lookup, so a test can ask
+    # what the agent asked for
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    protocol.memory_tools = mock.MagicMock(return_value=[])
+    protocol.identity_tools = mock.MagicMock(return_value=[])
+    protocol.ManagedMemoryService = mock.MagicMock()
     monkeypatch.syspath_prepend(HERE)
-    for name in ("memory", "prompts", "types_", "tools", "concierge_agent"):
+    for name in ("memory", "prompts", "types_", "tools", "concierge_agent", "demo_users"):
         sys.modules.pop(name, None)
     yield
 
@@ -151,3 +157,39 @@ def test_memorize_and_preferences_land_in_their_scopes(stubbed, monkeypatch):
     tools.remember_preference.fn("food_preference", "vegan, loves ceviche")
     assert store[("user", "alice", "food_preference")] == "vegan, loves ceviche"
     assert "learned_preferences" in memory.prompt_context()["user_profile"]
+
+
+def test_the_concierge_can_identify_and_remember(stubbed):
+    """The memory tools and `identify` are on the root agent.
+
+    The preferences the post-trip agent learns go to `user` scope, which is keyed by the
+    subject, so without `identify` they have nowhere to go.
+    """
+    import concierge_agent  # noqa: PLC0415
+
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    assert protocol.memory_tools.call_args.args == ("openai_agents",)
+    assert protocol.identity_tools.call_args.args == ("openai_agents",)
+    assert protocol.ManagedMemoryService.call_args.kwargs["long_term"] is True
+    assert concierge_agent.root_agent is not None
+
+
+def test_the_root_instructions_ask_who_is_travelling(stubbed):
+    from string import Formatter  # noqa: PLC0415
+
+    import concierge_agent  # noqa: PLC0415
+    import demo_users  # noqa: PLC0415
+    import prompts  # noqa: PLC0415
+
+    # the context block's own placeholders, so this test does not have to know them
+    fields = {name for _, name, _, _ in Formatter().parse(prompts.CONTEXT_BLOCK) if name}
+    with (
+        mock.patch.object(concierge_agent.memory, "prompt_context",
+                          return_value=dict.fromkeys(fields, "")),
+        mock.patch.object(concierge_agent.memory, "itinerary_summary", return_value=""),
+    ):
+        instructions = concierge_agent._root_instructions(None, None)
+
+    assert demo_users.IDENTITY_INSTRUCTIONS in instructions
+    for user in demo_users.USERS:
+        assert user["id"] in instructions

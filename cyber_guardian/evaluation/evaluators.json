@@ -150,5 +150,28 @@
         ]
       }
     ]
+  },
+  {
+    "name": "Asked who it is talking to",
+    "description": "The first turn asks who is there and does nothing else: no work is done for an unidentified person, because what it learns would be lost with the conversation.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "asked_who_first",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "threshold": 4,
+        "criteria": [
+          "Asks who it is talking to before doing the work it was asked for",
+          "Offers the people this demo knows, or accepts the name given",
+          "Does not answer the request until it knows who is there"
+        ]
+      }
+    ]
   }
 ]

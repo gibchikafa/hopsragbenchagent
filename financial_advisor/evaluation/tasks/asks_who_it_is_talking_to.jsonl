@@ -1,0 +1,2 @@
+{"input": "Analyze NVDA for me.", "forbiddenTools": "analyze_market, propose_strategies, plan_execution, assess_risk", "rubric": "Asks who it is talking to before analyzing anything, and names the people it knows. Calls no analyst: a ticker from someone unidentified is still not work it starts."}
+{"input": ["I'm Dana.", "What do you remember about me?"], "expectedTools": "identify", "rubric": "Identifies Dana, then says what it has stored about her, or that it has nothing yet. Does not invent a risk attitude it was never told."}

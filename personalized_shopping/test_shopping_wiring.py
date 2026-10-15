@@ -38,8 +38,14 @@ def stubbed(monkeypatch):
     pandas = sys.modules["pandas"]
     pandas.isna = lambda v: v is None
     pandas.DataFrame = lambda rows: rows
+    # fixed doubles rather than a fresh mock per attribute lookup, so a test can ask
+    # what the agent asked for
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    protocol.memory_tools = mock.MagicMock(return_value=[])
+    protocol.identity_tools = mock.MagicMock(return_value=[])
+    protocol.ManagedMemoryService = mock.MagicMock()
     monkeypatch.syspath_prepend(__file__.rsplit("/", 1)[0])
-    for name in ("store", "shopping_agent"):
+    for name in ("store", "shopping_agent", "prompts", "demo_users"):
         sys.modules.pop(name, None)
     yield
 
@@ -170,3 +176,34 @@ def test_the_openai_variant_wraps_the_same_store_tools(openai_stubbed):
     assert o.agent_app is not None
     assert [t.name for t in o.agent.tools] == list(TOOLS)
     assert o.agent.instructions.startswith("You are a webshop agent")
+
+
+def test_the_shopper_can_identify_and_remember(stubbed):
+    """The memory tools and `identify` are registered, and the store keeps facts.
+
+    Without `identify` the agent's memory is keyed by the conversation, so a size or an
+    allergy learned today is gone by the next visit; without long_term there is nothing
+    to key.
+    """
+    import shopping_agent  # noqa: PLC0415
+
+    # through sys.modules, not an import: `import a.b as c` would take the parent stub's
+    # __getattr__ and hand back a fresh mock that never saw the call
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    assert protocol.memory_tools.call_args.args == ("langgraph",)
+    assert protocol.identity_tools.call_args.args == ("langgraph",)
+    assert protocol.ManagedMemoryService.call_args.kwargs["long_term"] is True
+    assert shopping_agent.agent_app is not None
+
+
+def test_the_prompt_asks_who_is_shopping_before_searching(stubbed):
+    import demo_users  # noqa: PLC0415
+    import prompts  # noqa: PLC0415
+
+    assert demo_users.IDENTITY_INSTRUCTIONS in prompts.SYSTEM_PROMPT
+    for user in demo_users.USERS:
+        assert user["id"] in prompts.SYSTEM_PROMPT
+    # asked before the first search, not after
+    assert prompts.SYSTEM_PROMPT.index(demo_users.USERS[0]["id"]) < prompts.SYSTEM_PROMPT.index(
+        "**Search.**"
+    )

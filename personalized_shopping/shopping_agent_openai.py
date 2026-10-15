@@ -22,6 +22,8 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
+    identity_tools,
+    memory_tools,
     openai_summarizer,
 )
 from openai.types.responses import ResponseTextDeltaEvent
@@ -47,7 +49,13 @@ def _plain(tool: Any):
     return getattr(tool, "func", None) or getattr(tool, "coroutine", None) or tool
 
 
-TOOLS = [function_tool(_plain(t)) for t in STORE_TOOLS]
+# the shop's tools, the memory tools the model calls itself, and `identify`, which
+# says whose memory this is
+TOOLS = [
+    *[function_tool(_plain(t)) for t in STORE_TOOLS],
+    *memory_tools("openai_agents"),
+    *identity_tools("openai_agents"),
+]
 
 agent = Agent(
     name="Personalized shopping agent",
@@ -65,15 +73,15 @@ agent_app = AgentApp(
     "the order when you say so (OpenAI Agents SDK over Hopsworks feature-store search).",
     framework="openai_agents",
     welcome_message="Hi! I can help you find something in our shop, tell you all about "
-    "it, and order it for you when you're ready. What are you looking for?",
+    "it, and order it for you when you're ready. Who am I shopping for?",
     suggested_prompts=[
-        "Hello, who are you?",
+        "I'm Dana.",
         "Can you help me find a summer dress? Something flowy and floral.",
         "I'm looking for a rustic console table for my entryway.",
     ],
     placeholder="What are you looking for? You can also send a photo...",
     input_modalities=["text", "image"],
-    memory=ManagedMemoryService(summarize=openai_summarizer()),
+    memory=ManagedMemoryService(summarize=openai_summarizer(), long_term=True),
     tool_events=True,
 )
 

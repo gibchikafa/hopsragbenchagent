@@ -27,9 +27,13 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
+    identity_tools,
+    memory_tools,
     openai_summarizer,
 )
 from hopsworks_agents.protocol.autoevents import current_context
+
+import demo_users
 from openai.types.responses import ResponseTextDeltaEvent
 
 from prompts import INVESTIGATION_PROMPT, PERSONA
@@ -165,7 +169,16 @@ def approve_pending(approved: bool) -> str:
     return json.dumps({"executed": [json.loads(run(a["action"], a.get("target", ""))) for a in pending]})
 
 
-ORCHESTRATOR_INSTR = PERSONA + """
+ORCHESTRATOR_INSTR = PERSONA + f"""
+
+Before you work any alert, ask who is on shift and wait for the answer. This demo knows
+
+{demo_users.USERS_BLOCK}
+
+Call `identify` with the address above that matches the name they give, or with whatever \
+they gave you if it matches none; this is a demo, not a login. Then `recall` what that \
+analyst asked for last time, and `remember` anything they tell you about how they want \
+alerts handled. One alert's details are not that; "always give me the parent process" is.
 
 You are the central Orchestrator: you receive raw alert text, classify it and extract its entities, \
 delegate all analysis to the analyst tools, and synthesize their findings into a report. You are a \
@@ -208,7 +221,8 @@ returned; add nothing.
 orchestrator = Agent(
     name="cyber_guardian_orchestrator",
     instructions=ORCHESTRATOR_INSTR,
-    tools=[*ANALYST_TOOLS, function_tool(_plain(execute_response)), function_tool(_plain(create_incident)),
+    tools=[*ANALYST_TOOLS, *memory_tools("openai_agents"), *identity_tools("openai_agents"),
+           function_tool(_plain(execute_response)), function_tool(_plain(create_incident)),
            hold_for_approval, pending_approvals, approve_pending],
     model_settings=ModelSettings(temperature=0.0),
     **_model_kwargs(),
@@ -222,11 +236,11 @@ agent_app = AgentApp(
     "response playbook, and approval before anything disruptive (OpenAI Agents SDK orchestrator with "
     "analysts as tools, over Hopsworks feature-store lookups).",
     framework="openai_agents",
-    welcome_message="Paste a raw alert — an EDR detection, an IOC match or a phishing report — and "
+    welcome_message="Who is on shift? Then paste a raw alert — an EDR detection, an IOC match or a phishing report — and "
     "I'll triage it, check the indicators, investigate the logs and propose the playbook.",
     suggested_prompts=["What can you do?"],
     placeholder="Paste the raw alert text...",
-    memory=ManagedMemoryService(summarize=openai_summarizer()),
+    memory=ManagedMemoryService(summarize=openai_summarizer(), long_term=True),
     tool_events=True,
 )
 

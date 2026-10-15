@@ -1,0 +1,46 @@
+"""The people this demo knows, and the rule that makes the agent ask who is there.
+
+An agent with memory has to know whose memory it is: `remember` and `recall` are keyed
+by the subject, so until someone has identified themselves everything the agent stores
+belongs to the conversation and is lost with it. Hence the first question.
+
+A demo has no login to read an identity from, so it ships a few people instead. They are
+not credentials and nothing checks them; they exist so that a second conversation can be
+had as the same person, which is the only way to see memory working.
+"""
+
+from __future__ import annotations
+
+USERS = [
+    {
+        "id": "dana@example.com",
+        "name": "Dana",
+        "note": "conservative, long horizon, saving towards retirement",
+    },
+    {
+        "id": "marcus@example.com",
+        "name": "Marcus",
+        "note": "aggressive, trades around earnings, mostly technology",
+    },
+    {
+        "id": "priya@example.com",
+        "name": "Priya",
+        "note": "balanced, wants dividend income more than growth",
+    },
+]
+
+USERS_BLOCK = "\n".join(f"- {u['name']} ({u['id']}) — {u['note']}" for u in USERS)
+
+IDENTITY_INSTRUCTIONS = f"""Before anything else, ask who you are speaking with, and \
+wait for the answer. These are the people this demo knows:
+
+{USERS_BLOCK}
+
+Take a first name, a full name or an address, and call `identify` with the address above \
+that matches. If the name is not one of these, call `identify` with what they gave you \
+anyway, and carry on; this is a demo, not a login.
+
+Once you know who is there, call `recall` before asking anything you may already have \
+been told, and `remember` whatever they tell you about themselves that would still be \
+true next week. What they say about one ticker today is not that; their risk attitude \
+and what they are investing for is."""

@@ -35,6 +35,8 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
+    identity_tools,
+    memory_tools,
     anthropic_summarizer,
 )
 from langchain_anthropic import ChatAnthropic
@@ -46,9 +48,14 @@ from store import TOOLS
 MODEL = os.environ.get("WEBSHOP_MODEL", "claude-sonnet-4-5")
 
 
+# the shop's tools, the memory tools the model calls itself, and `identify`, which
+# says whose memory this is: until it is called, what the agent remembers belongs to
+# the conversation alone
+SHOPPER_TOOLS = [*TOOLS, *memory_tools("langgraph"), *identity_tools("langgraph")]
+
 agent = create_react_agent(
     ChatAnthropic(model=MODEL, max_tokens=4096, temperature=0.0),
-    TOOLS,
+    SHOPPER_TOOLS,
     prompt=SYSTEM_PROMPT,
 )
 
@@ -61,15 +68,15 @@ agent_app = AgentApp(
     "the order when you say so (LangGraph agent over Hopsworks feature-store search).",
     framework="langgraph",
     welcome_message="Hi! I can help you find something in our shop, tell you all about "
-    "it, and order it for you when you're ready. What are you looking for?",
+    "it, and order it for you when you're ready. Who am I shopping for?",
     suggested_prompts=[
-        "Hello, who are you?",
+        "I'm Dana.",
         "Can you help me find a summer dress? Something flowy and floral.",
         "I'm looking for a rustic console table for my entryway.",
     ],
     placeholder="What are you looking for? You can also send a photo...",
     input_modalities=["text", "image"],
-    memory=ManagedMemoryService(summarize=anthropic_summarizer()),
+    memory=ManagedMemoryService(summarize=anthropic_summarizer(), long_term=True),
     tool_events=True,
     graph=agent,
 )

@@ -67,6 +67,16 @@ wrapping one store lookup; held actions wait in working memory for `approve_pend
 store, same feature groups, same evaluation suites. The OpenAI entry point runs on OpenAI's
 models (`OPENAI_API_KEY`) or any LiteLLM model name in `GUARDIAN_OPENAI_MODEL`.
 
+## Who is on shift
+
+The workflow asks which analyst is on before it works an alert, and binds the conversation
+to them. `demo_users.py` is the list it offers, and the matching is in code rather than in
+a prompt: this agent classifies and routes rather than talking its way to an answer, so
+there is no model loop that might call `identify` and might not.
+
+That first question is what makes the rest of the memory work: a standing request like
+"always give me the parent process" is keyed by the analyst, so it outlives one shift.
+
 ## Deploy
 
 ```bash

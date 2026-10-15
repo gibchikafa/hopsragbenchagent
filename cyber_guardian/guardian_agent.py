@@ -39,6 +39,8 @@ from hopsworks_agents.protocol import (
     anthropic_summarizer,
 )
 from hopsworks_agents.protocol.autoevents import current_context
+
+import demo_users
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -378,16 +380,17 @@ agent_app = AgentApp(
     "ledger, threat intelligence, log investigation, the response playbook, and approval before "
     "anything disruptive (LangGraph workflow over Hopsworks feature-store lookups).",
     framework="langgraph",
-    welcome_message="Paste a raw alert — an EDR detection, an IOC match or a phishing report — and "
-    "I'll triage it, check the indicators, investigate the logs and propose the playbook.",
+    welcome_message="Who is on shift? Then paste a raw alert — an EDR detection, an IOC "
+    "match or a phishing report — and I'll triage it, check the indicators, investigate "
+    "the logs and propose the playbook.",
     suggested_prompts=[
-        "What can you do?",
+        "Rachel Okafor",
         "SCH_SR_Crowdstrike_IOC_Match/Host:winws1045\nUser m.chen on Host winws1045 (WINDOWS 11 "
         "Workstation, IP 10.12.0.101) alerted: an IP address matched a Custom Intelligence Indicator "
         "(LockbitC2), critical severity. IOC: 198.51.100.42. Process: teams.exe PID 7100, parent explorer.exe.",
     ],
     placeholder="Paste the raw alert text...",
-    memory=ManagedMemoryService(summarize=anthropic_summarizer()),
+    memory=ManagedMemoryService(summarize=anthropic_summarizer(), long_term=True),
     tool_events=True,
     graph=workflow,
 )
@@ -399,6 +402,20 @@ async def stream(request, ctx):
     tool the workflow calls shows as a progress chip."""
     if not request.text:
         raise AgentError("Paste the raw alert text.", code="invalid_request", status_code=400)
+
+    # Who is on shift, before any alert is worked. The workflow has no model loop that
+    # could decide to call `identify`, so the identity is matched here: a name binds the
+    # conversation to that analyst, and what the agent remembers follows them to their
+    # next shift rather than dying with this conversation.
+    if not ctx.has_subject:
+        analyst = demo_users.match(request.text)
+        if analyst is None:
+            yield demo_users.WHO_IS_ON_SHIFT
+            return
+        ctx.rebind_subject(analyst)
+        yield f"Shift noted, {analyst}. Paste the alert and I'll take it from there."
+        return
+
     context = ctx.system_context()
     final: dict = {}
 

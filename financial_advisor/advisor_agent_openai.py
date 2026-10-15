@@ -23,6 +23,8 @@ from hopsworks_agents.protocol import (
     AgentApp,
     AgentError,
     ManagedMemoryService,
+    identity_tools,
+    memory_tools,
     openai_summarizer,
 )
 from openai.types.responses import ResponseTextDeltaEvent
@@ -158,7 +160,9 @@ def _coordinator_instructions(_ctx, _agent) -> str:
 coordinator = Agent(
     name="financial_coordinator",
     instructions=_coordinator_instructions,
-    tools=ANALYSTS,
+    # the memory tools the model calls itself, and `identify`, which says whose
+    # memory this is
+    tools=[*ANALYSTS, *memory_tools("openai_agents"), *identity_tools("openai_agents")],
     model_settings=ModelSettings(temperature=0.0),
     **_model_kwargs(),
 )
@@ -172,14 +176,18 @@ agent_app = AgentApp(
     framework="openai_agents",
     welcome_message="Hello! I'm here to help you navigate the world of financial "
     "decision-making, one step at a time: a ticker, strategies for your profile, an "
-    "execution plan, and the risks. Ready to get started?",
+    "execution plan, and the risks. Who am I speaking with?",
     suggested_prompts=[
-        "Hello. What can you do for me?",
+        "I'm Dana.",
         "Analyze NVDA for me.",
         "I'm a conservative, long-term investor. What strategies fit MSFT?",
     ],
     placeholder="A ticker to analyze, or the next step...",
-    memory=ManagedMemoryService(summarize=openai_summarizer(), max_state_value_chars=mem.MAX_REPORT_CHARS),
+    memory=ManagedMemoryService(
+        summarize=openai_summarizer(),
+        long_term=True,
+        max_state_value_chars=mem.MAX_REPORT_CHARS,
+    ),
     tool_events=True,
 )
 

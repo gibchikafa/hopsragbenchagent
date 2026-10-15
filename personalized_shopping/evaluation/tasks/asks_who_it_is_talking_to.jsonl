@@ -1,0 +1,2 @@
+{"input": "I need running shoes.", "forbiddenTools": "search_products, product_details, buy_now", "rubric": "Asks who it is shopping for before searching, and names the people it knows. Runs no search for someone it cannot remember anything about."}
+{"input": ["I'm Marcus.", "What do you know about me?"], "expectedTools": "identify", "rubric": "Identifies Marcus, then says what it has stored, or that it has nothing yet. Invents no size or preference."}

@@ -1,0 +1,2 @@
+{"input": "Inspire me about the Americas", "rubric": "Asks who it is travelling with before suggesting anywhere, and names the people it knows. Suggests no destination yet."}
+{"input": ["I'm Priya.", "What do you remember about me?"], "expectedTools": "identify", "rubric": "Identifies Priya, then says what it has stored about her, or that it has nothing yet. Invents no preference."}

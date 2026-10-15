@@ -33,11 +33,17 @@ def stubbed(monkeypatch):
     pandas.isna = lambda v: v is None
     pandas.DataFrame = lambda rows: rows
     pandas.Timestamp = __import__("datetime").datetime.fromisoformat
+    # fixed doubles rather than a fresh mock per attribute lookup, so a test can ask
+    # what the agent asked for
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    protocol.memory_tools = mock.MagicMock(return_value=[])
+    protocol.identity_tools = mock.MagicMock(return_value=[])
+    protocol.ManagedMemoryService = mock.MagicMock()
     graph = sys.modules["langgraph.graph"]
     graph.START, graph.END = "__start__", "__end__"
     graph.StateGraph = lambda state: mock.MagicMock()
     monkeypatch.syspath_prepend(__file__.rsplit("/", 1)[0])
-    for name in ("store", "prompts", "guardian_agent"):
+    for name in ("store", "prompts", "guardian_agent", "demo_users"):
         sys.modules.pop(name, None)
     yield
 
@@ -168,3 +174,24 @@ def test_the_openai_variant_is_the_recipes_orchestrator_with_analysts_as_tools(o
     assert [t.name for t in o.ANALYSTS["triage_agent"].tools] == ["triage_query"]
     assert [t.name for t in o.ANALYSTS["response_agent"].tools] == ["get_playbook"]
     assert "Step 2, triage, always first" in o.ORCHESTRATOR_INSTR
+
+
+def test_the_guardian_keeps_what_the_analyst_asks_for(stubbed):
+    """Long-term memory, so an analyst's standing request outlives one shift."""
+    import guardian_agent  # noqa: PLC0415
+
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    assert protocol.ManagedMemoryService.call_args.kwargs["long_term"] is True
+    assert guardian_agent.agent_app is not None
+
+
+def test_an_analyst_is_matched_by_whatever_they_type(stubbed):
+    import demo_users  # noqa: PLC0415
+
+    for said in ("Rachel Okafor", "rachel", "okafor", "r.okafor@example.com"):
+        assert demo_users.match(said) == "r.okafor@example.com", said
+    assert demo_users.match("someone else") is None
+    assert demo_users.match("") is None
+    # the question names everyone, so an analyst can see who the demo knows
+    for user in demo_users.USERS:
+        assert user["name"] in demo_users.WHO_IS_ON_SHIFT

@@ -71,5 +71,21 @@
     "tasksFile": "tasks/buys_only_when_told.jsonl",
     "gateMetric": "pass_rate",
     "gateThreshold": 1.0
+  },
+  {
+    "name": "Asks who it is talking to",
+    "description": "The first question, and what it is for: memory is keyed by the person, so an agent that starts work for an unidentified user loses everything it learns.",
+    "tags": [
+      "regression",
+      "memory"
+    ],
+    "executionMode": "read_only",
+    "passPolicy": "all",
+    "passThreshold": 0.7,
+    "evaluators": [
+      "Asked who it is talking to",
+      "No tool errored"
+    ],
+    "tasksFile": "tasks/asks_who_it_is_talking_to.jsonl"
   }
 ]

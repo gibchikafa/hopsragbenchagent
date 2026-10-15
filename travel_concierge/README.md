@@ -63,6 +63,16 @@ profile in later conversations, which is what the recipe said it wanted from
 them. The stored itinerary is a few thousand characters, so the state value
 limit is raised.
 
+## Who it is travelling with
+
+The concierge asks who the traveller is before it plans anything, and calls `identify` with
+the address it matches. `demo_users.py` is the list it offers, because a demo has no login
+to read an identity from; nothing checks the names.
+
+That first question is what makes the rest of the memory work: the preferences the post-trip
+agent learns go to `user` scope, which is keyed by the subject, so until someone has
+identified themselves they have nowhere to go.
+
 ## Deploy
 
 ```python
