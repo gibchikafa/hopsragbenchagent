@@ -42,6 +42,7 @@ from hopsworks_agents.protocol import (
 from langchain_anthropic import ChatAnthropic
 from langgraph.prebuilt import create_react_agent
 
+import demo_users
 from prompts import SYSTEM_PROMPT
 from store import TOOLS
 
@@ -116,7 +117,10 @@ async def stream(request, ctx):
     """One handler serves both endpoints; ctx.stream_langchain yields token
     deltas and turns each tool call into a progress chip."""
     content = _user_content(request)
-    messages = [{"role": "system", "content": ctx.system_context()}] if ctx.system_context() else []
+    # the identity the client asserted, when there is one: a real deployment has a
+    # login and does not ask
+    context = ctx.system_context() + demo_users.already_identified(ctx)
+    messages = [{"role": "system", "content": context}] if context else []
     messages += ctx.history
     messages.append({"role": "user", "content": content})
     async for delta in ctx.stream_langchain(

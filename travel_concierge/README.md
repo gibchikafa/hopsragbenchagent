@@ -68,6 +68,10 @@ limit is raised.
 The concierge asks who the traveller is before it plans anything, and calls `identify` with
 the address it matches. `demo_users.py` is the list it offers, because a demo has no login
 to read an identity from; nothing checks the names.
+In a real deployment the agent would not ask at all. The client asserts `subject` on each
+request — the user id or address its own session already knows — and the SDK keys memory by
+it; `demo_users.py` stands in for that login, and the question is skipped whenever an
+identity arrives with the request.
 
 That first question is what makes the rest of the memory work: the preferences the post-trip
 agent learns go to `user` scope, which is keyed by the subject, so until someone has

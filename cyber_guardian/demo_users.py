@@ -58,3 +58,20 @@ def match(text: str) -> str | None:
         if said in candidates or any(f" {c} " in f" {said} " for c in candidates if len(c) > 2):
             return user["id"]
     return None
+
+
+def already_identified(ctx) -> str:
+    """What to tell the model when the application already said who this is.
+
+    A real deployment has a login: the client asserts `subject` on each request — the user
+    id or address its own session knows — and the SDK keys memory by it without anyone
+    being asked anything. Asking is what a demo does instead, so the question is skipped
+    whenever the identity arrived with the request.
+    """
+    if not getattr(ctx, "has_subject", False) or getattr(ctx, "subject_source", "") != "client":
+        return ""
+    return (
+        f"\n\nThe application has already identified this person as {ctx.subject}. "
+        "Do not ask who they are. Greet them, call `recall` for what you already know, "
+        "and carry on."
+    )

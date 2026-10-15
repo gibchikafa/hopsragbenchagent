@@ -28,6 +28,7 @@ from hopsworks_agents.protocol import (
 )
 from openai.types.responses import ResponseTextDeltaEvent
 
+import demo_users
 from prompts import SYSTEM_PROMPT
 from store import TOOLS as STORE_TOOLS
 
@@ -103,7 +104,9 @@ def _user_item(request) -> dict[str, Any]:
 
 def _input_items(ctx, request) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    summary = ctx.system_context()
+    # the identity the client asserted, when there is one: a real deployment has a login
+    # and does not ask
+    summary = ctx.system_context() + demo_users.already_identified(ctx)
     if summary:
         items.append({"role": "user", "content": "(" + summary + ")"})
     for turn in ctx.history:

@@ -68,6 +68,7 @@ from advisor_memory import missing as _missing
 from advisor_memory import progress_block as _progress_block
 from advisor_memory import read as _read
 from advisor_memory import write as _write
+import demo_users
 from prompts import (
     COORDINATOR_PROMPT,
     DATA_ANALYST_PROMPT,
@@ -293,7 +294,8 @@ async def stream(request, ctx):
     # The prompt, the rolling summary of folded turns, and where the process
     # stands: which reports exist, so a resumed conversation continues rather
     # than starting over.
-    system = COORDINATOR_PROMPT + ctx.system_context() + _progress_block()
+    system = (COORDINATOR_PROMPT + ctx.system_context()
+              + demo_users.already_identified(ctx) + _progress_block())
     messages = [{"role": "system", "content": system}]
     messages += ctx.history
     messages.append({"role": "user", "content": request.text})

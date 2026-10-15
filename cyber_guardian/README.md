@@ -73,6 +73,10 @@ The workflow asks which analyst is on before it works an alert, and binds the co
 to them. `demo_users.py` is the list it offers, and the matching is in code rather than in
 a prompt: this agent classifies and routes rather than talking its way to an answer, so
 there is no model loop that might call `identify` and might not.
+In a real deployment the agent would not ask at all. The client asserts `subject` on each
+request — the user id or address its own session already knows — and the SDK keys memory by
+it; `demo_users.py` stands in for that login, and the question is skipped whenever an
+identity arrives with the request.
 
 That first question is what makes the rest of the memory work: a standing request like
 "always give me the parent process" is keyed by the analyst, so it outlives one shift.

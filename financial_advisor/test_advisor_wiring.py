@@ -182,3 +182,33 @@ def test_the_prompt_asks_who_is_there_before_advising(stubbed):
     assert prompts.COORDINATOR_PROMPT.index(demo_users.USERS[0]["id"]) < prompts.COORDINATOR_PROMPT.index(
         prompts.DISCLAIMER
     )
+
+
+def test_the_question_is_skipped_when_the_client_already_knows(stubbed):
+    """A real deployment has a login: the identity arrives with the request.
+
+    `subject` asserted by the client is what a signed-in application sends, and the SDK
+    keys memory by it. Asking is the demo's stand-in, so it has to stop when there is a
+    real answer already.
+    """
+    import types  # noqa: PLC0415
+
+    import demo_users  # noqa: PLC0415
+
+    asserted = types.SimpleNamespace(
+        has_subject=True, subject="dana@example.com", subject_source="client"
+    )
+    note = demo_users.already_identified(asserted)
+    assert "dana@example.com" in note
+    assert "Do not ask who they are" in note
+
+    # a conversation nobody identified falls back to the question
+    anonymous = types.SimpleNamespace(
+        has_subject=False, subject="conv-1", subject_source="conversation"
+    )
+    assert demo_users.already_identified(anonymous) == ""
+    # and so does one the agent worked out itself, which is already past the question
+    worked_out = types.SimpleNamespace(
+        has_subject=True, subject="dana@example.com", subject_source="app"
+    )
+    assert demo_users.already_identified(worked_out) == ""
