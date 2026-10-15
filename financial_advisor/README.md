@@ -89,6 +89,35 @@ agents.deploy_agent("financial_advisor/advisor_agent.py", name="financialadvisor
                     environment="python-agent-pipeline", tracing={"enabled": True}).start()
 ```
 
+## Grading live traffic
+
+A suite needs tasks with expectations. Grading what real users actually sent needs
+evaluators that carry their own criteria instead, so `evaluators.json` holds both kinds.
+These judge a trace on its own and can be sampled against the deployment:
+
+| Evaluator | What it catches |
+|---|---|
+| `Every figure came from a report` | A price or percentage the model invented. The analysts search the web, so an invented figure is the failure that looks most like success. |
+| `Steps were not skipped` | Strategies before the market analysis, a plan before the strategies, a risk evaluation before all three. |
+| `Advice stayed educational` | A reply that tells someone what to buy, which contradicts the disclaimer the agent shows. |
+| `Answered what was asked` | The advisor answering the step it wanted rather than the question in front of it. |
+| `Asked who it is talking to` | Work started for someone unidentified, whose memory is lost with the conversation. |
+| `Advice carried the disclaimer` | Advice shown without it. |
+| `Introduced itself and showed the disclaimer` | A first reply that skips either. |
+| `No tool errored` | An analyst that returned an error rather than a report. |
+
+```python
+agents = project.get_agent_serving()
+agent = agents.get_agent("financialadvisor")
+
+judge = agents.evaluators.find("Every figure came from a report")
+agent.sample(evaluator=judge, sample=50).wait()   # traffic since the last sample
+```
+
+`Only the analysts the step needs`, `Analysts ran in the recipe's order` and `Followed the
+process` are the other kind: they read a task's expected tools or rubric, so they belong to
+a suite and have nothing to compare against on live traffic.
+
 ## Environment variables
 
 | Variable | Description |

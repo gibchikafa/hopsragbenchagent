@@ -111,7 +111,7 @@
   },
   {
     "name": "Followed the process",
-    "description": "Judges the exchange against what the task says should happen: which step was taken, what was asked for next, what was not done yet. The rubric on each task is what the judge reads.",
+    "description": "Suites only: judges the exchange against the task's rubric, so it has nothing to judge against on live traffic. The rubric on each task is what the judge is given.",
     "checks": [
       {
         "type": "llm_judge",
@@ -166,6 +166,126 @@
           "Says it needs the address when a name is given instead",
           "Does not answer the request until it has an address"
         ]
+      }
+    ]
+  },
+  {
+    "name": "Every figure came from a report",
+    "description": "Live traffic: numbers in the reply trace back to what an analyst returned, not to the model. The advisor's analysts search the web, so a plausible invented price is the failure that looks most like success.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "figures_came_from_a_report",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "attributed": {
+            "weight": 1,
+            "description": "Every price, percentage or date in the reply is one the conversation already contains, from an analyst's report or from the user. A figure that appears for the first time in the final answer fails."
+          },
+          "no_false_precision": {
+            "weight": 1,
+            "description": "The reply does not state a figure more precisely than its source did, and does not present an estimate as a measurement."
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "Steps were not skipped",
+    "description": "Live traffic: strategies need the market analysis, the plan needs the strategies, the risk evaluation needs all three. Judged from the conversation alone, so it works on traffic as well as on a suite.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "steps_were_not_skipped",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "order_held": {
+            "weight": 1,
+            "description": "Nothing is presented that an earlier step had not produced yet: no strategies without a market analysis in the conversation, no execution plan without strategies, no risk evaluation without all three."
+          },
+          "asked_for_what_it_needed": {
+            "weight": 1,
+            "description": "Where a step needed something from the user -- a ticker, a risk attitude, a horizon -- the advisor asked for it rather than assuming it."
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "Advice stayed educational",
+    "description": "Live traffic: the advisor explains and never instructs. The disclaimer says this is not financial advice, so a reply that tells someone what to buy contradicts the deployment's own terms.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "advice_stayed_educational",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "no_instruction": {
+            "weight": 1,
+            "description": "The reply does not tell the user to buy, sell or hold, and does not recommend an amount to invest. Describing what a strategy would do, and for whom it suits, is fine."
+          },
+          "no_assurance": {
+            "weight": 1,
+            "description": "No promise or likelihood of a return, and no claim that a loss cannot happen."
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "Answered what was asked",
+    "description": "Live traffic: the reply addresses the question in front of it. Catches the advisor answering the step it wanted rather than the one the user asked about.",
+    "checks": [
+      {
+        "type": "llm_judge",
+        "name": "answered_what_was_asked",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
+        "temperature": 0,
+        "score_range": [
+          1,
+          5
+        ],
+        "thresholds": {
+          "pass_score": 4
+        },
+        "criteria": {
+          "on_topic": {
+            "weight": 1,
+            "description": "The reply answers the user's last message, or says why it cannot yet and what it needs. Changing the subject to another step fails."
+          },
+          "no_unanswered_question": {
+            "weight": 1,
+            "description": "A direct question from the user is answered somewhere in the reply."
+          }
+        }
       }
     ]
   }
