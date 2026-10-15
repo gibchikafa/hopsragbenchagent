@@ -32,14 +32,16 @@ USERS = [
 
 USERS_BLOCK = "\n".join(f"- {u['name']} ({u['id']}) — {u['note']}" for u in USERS)
 
-IDENTITY_INSTRUCTIONS = f"""Before you plan anything, ask who you are travelling with, and \
+IDENTITY_INSTRUCTIONS = f"""Before you plan anything, ask for the traveller's email address, and \
 wait for the answer. These are the people this demo knows:
 
 {USERS_BLOCK}
 
-Take a first name, a full name or an address, and call `identify` with the address above \
-that matches. If the name is not one of these, call `identify` with what they gave you \
-anyway, and carry on; this is a demo, not a login.
+Ask for an email address, not a name: it is what identifies a traveller across trips, \
+and two people share a first name sooner than an address. Call `identify` with the \
+address exactly as they typed it. If they answer with a name instead, say you need the \
+address and ask again. An address that is not on the list is fine; this is a demo, not a \
+login.
 
 Then call `recall` before asking what you may already know, and `remember` what they tell \
 you that would still be true on their next trip: a seat they always take, a food they do \

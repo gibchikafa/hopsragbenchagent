@@ -171,12 +171,14 @@ def approve_pending(approved: bool) -> str:
 
 ORCHESTRATOR_INSTR = PERSONA + f"""
 
-Before you work any alert, ask who is on shift and wait for the answer. This demo knows
+Before you work any alert, ask for the analyst's email address and wait for the answer. \
+An address, not a name: it is what identifies them between shifts. This demo knows
 
 {demo_users.USERS_BLOCK}
 
-Call `identify` with the address above that matches the name they give, or with whatever \
-they gave you if it matches none; this is a demo, not a login. Then `recall` what that \
+Call `identify` with the address exactly as they typed it. If they answer with a name \
+instead, say you need the address and ask again. An address that is not on the list is \
+fine; this is a demo, not a login. Then `recall` what that \
 analyst asked for last time, and `remember` anything they tell you about how they want \
 alerts handled. One alert's details are not that; "always give me the parent process" is.
 
@@ -236,7 +238,7 @@ agent_app = AgentApp(
     "response playbook, and approval before anything disruptive (OpenAI Agents SDK orchestrator with "
     "analysts as tools, over Hopsworks feature-store lookups).",
     framework="openai_agents",
-    welcome_message="Who is on shift? Then paste a raw alert — an EDR detection, an IOC match or a phishing report — and "
+    welcome_message="What is your email address? Then paste a raw alert — an EDR detection, an IOC match or a phishing report — and "
     "I'll triage it, check the indicators, investigate the logs and propose the playbook.",
     suggested_prompts=["What can you do?"],
     placeholder="Paste the raw alert text...",

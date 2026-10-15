@@ -1,2 +1,3 @@
-{"input": "Inspire me about the Americas", "rubric": "Asks who it is travelling with before suggesting anywhere, and names the people it knows. Suggests no destination yet."}
-{"input": ["I'm Priya.", "What do you remember about me?"], "expectedTools": "identify", "rubric": "Identifies Priya, then says what it has stored about her, or that it has nothing yet. Invents no preference."}
+{"input": "Inspire me about the Americas", "rubric": "Asks for an email address before suggesting anywhere, and names the addresses it knows. Suggests no destination yet."}
+{"input": ["I'm Priya.", "priya@example.com"], "expectedTools": "identify", "rubric": "A first name is not enough: says it needs the email address and asks again, then identifies priya@example.com when it is given."}
+{"input": ["priya@example.com", "What do you remember about me?"], "expectedTools": "identify", "rubric": "Identifies priya@example.com, then says what it has stored about her, or that it has nothing yet. Invents no preference."}

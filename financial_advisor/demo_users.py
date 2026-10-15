@@ -31,14 +31,16 @@ USERS = [
 
 USERS_BLOCK = "\n".join(f"- {u['name']} ({u['id']}) — {u['note']}" for u in USERS)
 
-IDENTITY_INSTRUCTIONS = f"""Before anything else, ask who you are speaking with, and \
+IDENTITY_INSTRUCTIONS = f"""Before anything else, ask for the email address you are speaking with, and \
 wait for the answer. These are the people this demo knows:
 
 {USERS_BLOCK}
 
-Take a first name, a full name or an address, and call `identify` with the address above \
-that matches. If the name is not one of these, call `identify` with what they gave you \
-anyway, and carry on; this is a demo, not a login.
+Ask for an email address, not a name: it is what identifies someone across \
+conversations, and two people share a first name sooner than an address. Call `identify` \
+with the address exactly as they typed it. If they answer with a name instead, say you \
+need the address and ask again. An address that is not on the list is fine; this is a \
+demo, not a login.
 
 Once you know who is there, call `recall` before asking anything you may already have \
 been told, and `remember` whatever they tell you about themselves that would still be \

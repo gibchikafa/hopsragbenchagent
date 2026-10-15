@@ -50,8 +50,7 @@ working-memory keys, so either can continue a plan the other started.
 
 ## Who it is talking to
 
-The advisor asks who is there before it introduces itself, and calls `identify` with the
-address it matches. `demo_users.py` is the list it offers, because a demo has no login to
+The advisor asks for an email address before it introduces itself, and calls `identify` with it. `demo_users.py` is the list it offers, because a demo has no login to
 read an identity from; nothing checks the names.
 In a real deployment the agent would not ask at all. The client asserts `subject` on each
 request — the user id or address its own session already knows — and the SDK keys memory by
@@ -60,7 +59,7 @@ identity arrives with the request.
 
 That first question is what makes the rest of the memory work: `remember` and `recall` are
 keyed by the subject, so until someone has identified themselves a risk attitude learned
-today belongs to the conversation and is lost with it. Say you are Dana in a second
+today belongs to the conversation and is lost with it. Give the same address in a second
 conversation and the advisor starts from what it already knows.
 
 ## Deploy

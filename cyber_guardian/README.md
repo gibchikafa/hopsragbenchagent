@@ -69,8 +69,8 @@ models (`OPENAI_API_KEY`) or any LiteLLM model name in `GUARDIAN_OPENAI_MODEL`.
 
 ## Who is on shift
 
-The workflow asks which analyst is on before it works an alert, and binds the conversation
-to them. `demo_users.py` is the list it offers, and the matching is in code rather than in
+The workflow asks for the analyst's email address before it works an alert, and binds the
+conversation to it. `demo_users.py` is the list it offers, and the matching is in code rather than in
 a prompt: this agent classifies and routes rather than talking its way to an answer, so
 there is no model loop that might call `identify` and might not.
 In a real deployment the agent would not ask at all. The client asserts `subject` on each

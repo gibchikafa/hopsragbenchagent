@@ -65,8 +65,7 @@ limit is raised.
 
 ## Who it is travelling with
 
-The concierge asks who the traveller is before it plans anything, and calls `identify` with
-the address it matches. `demo_users.py` is the list it offers, because a demo has no login
+The concierge asks for an email address before it plans anything, and calls `identify` with it. `demo_users.py` is the list it offers, because a demo has no login
 to read an identity from; nothing checks the names.
 In a real deployment the agent would not ask at all. The client asserts `subject` on each
 request — the user id or address its own session already knows — and the SDK keys memory by

@@ -11,9 +11,14 @@ as the same analyst, which is the only way to see memory working.
 Unlike the agents that talk their way to an answer, this one is a workflow: it classifies
 the message and routes it. So the identity is matched here, in code, rather than left to a
 model that might call `identify` or might not.
+
+By address rather than by name, as everywhere else: a name is how an analyst is greeted,
+an address is what identifies them between shifts. Two Rachels are one incident away.
 """
 
 from __future__ import annotations
+
+import re
 
 USERS = [
     {
@@ -33,31 +38,31 @@ USERS = [
     },
 ]
 
+#: What counts as an address here: enough to recognise one, not to validate it.
+EMAIL = re.compile(r"[^\s<>@,;]+@[^\s<>@,;]+\.[A-Za-z]{2,}")
+
 USERS_BLOCK = "\n".join(f"- {u['name']} ({u['id']}) — {u['note']}" for u in USERS)
 
 WHO_IS_ON_SHIFT = (
-    "Before we start: who is on shift? This demo knows\n\n"
+    "Before we start: what is your email address? This demo knows\n\n"
     + USERS_BLOCK
-    + "\n\nSay a name and I will pick up where that analyst left off. Any other name is "
-    "fine too; nothing here is a login."
+    + "\n\nGive me the address and I will pick up where that analyst left off. Another "
+    "address is fine too; nothing here is a login."
 )
 
 
 def match(text: str) -> str | None:
-    """The analyst the message names, or None.
+    """The email address in the message, or None.
 
-    Matches a full name, a first name, a surname or the address itself, because an analyst
-    answering "who is on shift" types the shortest thing that identifies them.
+    An address, not a name: it is what identifies an analyst between shifts, and what the
+    other agents here ask for. Any address is taken, not only the ones this demo knows,
+    because a cluster with real analysts on it has its own.
     """
-    said = (text or "").strip().lower()
+    said = (text or "").strip()
     if not said:
         return None
-    for user in USERS:
-        names = user["name"].lower().split()
-        candidates = {user["id"].lower(), user["name"].lower(), *names}
-        if said in candidates or any(f" {c} " in f" {said} " for c in candidates if len(c) > 2):
-            return user["id"]
-    return None
+    found = EMAIL.search(said)
+    return found.group(0).lower() if found else None
 
 
 def already_identified(ctx) -> str:

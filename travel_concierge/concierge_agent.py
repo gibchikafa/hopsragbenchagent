@@ -156,10 +156,10 @@ agent_app = AgentApp(
     "in-trip and post-trip support, handing the conversation to one another (OpenAI Agents SDK; "
     "working memory on Hopsworks).",
     framework="openai_agents",
-    welcome_message="Hello! I'm your travel concierge. Who am I travelling with? Then: "
+    welcome_message="Hello! I'm your travel concierge. What is your email address? Then: "
     "inspiration, a trip to plan, or one already booked?",
     suggested_prompts=[
-        "I'm Priya.",
+        "priya@example.com",
         "Inspire me about the Americas",
         "Find flights to London from JFK on April 20th for 4 days. Pick any flights and seats, any hotel and room, without my input; confirm with me before generating an itinerary.",
         "transfer to pre_trip",

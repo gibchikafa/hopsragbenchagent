@@ -74,9 +74,9 @@ agent_app = AgentApp(
     "the order when you say so (OpenAI Agents SDK over Hopsworks feature-store search).",
     framework="openai_agents",
     welcome_message="Hi! I can help you find something in our shop, tell you all about "
-    "it, and order it for you when you're ready. Who am I shopping for?",
+    "it, and order it for you when you're ready. What is your email address?",
     suggested_prompts=[
-        "I'm Dana.",
+        "dana@example.com",
         "Can you help me find a summer dress? Something flowy and floral.",
         "I'm looking for a rustic console table for my entryway.",
     ],

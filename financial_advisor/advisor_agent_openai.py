@@ -177,9 +177,9 @@ agent_app = AgentApp(
     framework="openai_agents",
     welcome_message="Hello! I'm here to help you navigate the world of financial "
     "decision-making, one step at a time: a ticker, strategies for your profile, an "
-    "execution plan, and the risks. Who am I speaking with?",
+    "execution plan, and the risks. What is your email address?",
     suggested_prompts=[
-        "I'm Dana.",
+        "dana@example.com",
         "Analyze NVDA for me.",
         "I'm a conservative, long-term investor. What strategies fit MSFT?",
     ],

@@ -60,8 +60,7 @@ model name in `WEBSHOP_OPENAI_MODEL`, e.g. `anthropic/claude-sonnet-4-5`.
 
 ## Who it is shopping for
 
-The agent asks who is shopping before it searches, and calls `identify` with the address it
-matches. `demo_users.py` is the list it offers, because a demo has no login to read an
+The agent asks for an email address before it searches, and calls `identify` with it. `demo_users.py` is the list it offers, because a demo has no login to read an
 identity from; nothing checks the names.
 In a real deployment the agent would not ask at all. The client asserts `subject` on each
 request — the user id or address its own session already knows — and the SDK keys memory by
@@ -70,7 +69,7 @@ identity arrives with the request.
 
 That first question is what makes the rest of the memory work: `remember` and `recall` are
 keyed by the subject, so until someone has identified themselves a size or an allergy
-belongs to the conversation and is lost with it. Come back as Dana and the shop remembers.
+belongs to the conversation and is lost with it. Come back with the same address and the shop remembers.
 
 ## Deploy
 

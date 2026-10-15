@@ -56,8 +56,8 @@
     "gateThreshold": 1.0
   },
   {
-    "name": "Asks who it is talking to",
-    "description": "The first question, and what it is for: memory is keyed by the person, so an agent that starts work for an unidentified user loses everything it learns.",
+    "name": "Asks for an email address",
+    "description": "The first question, and what it is for: memory is keyed by the address, so an agent that starts work for someone unidentified loses everything it learns.",
     "tags": [
       "regression",
       "memory"

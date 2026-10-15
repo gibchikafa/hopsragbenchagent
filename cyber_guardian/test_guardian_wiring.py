@@ -185,16 +185,25 @@ def test_the_guardian_keeps_what_the_analyst_asks_for(stubbed):
     assert guardian_agent.agent_app is not None
 
 
-def test_an_analyst_is_matched_by_whatever_they_type(stubbed):
+def test_an_analyst_is_identified_by_address_not_by_name(stubbed):
+    """An address identifies someone between shifts; a name greets them.
+
+    Two Rachels are one incident away, and the other agents here ask for an address too.
+    """
     import demo_users  # noqa: PLC0415
 
-    for said in ("Rachel Okafor", "rachel", "okafor", "r.okafor@example.com"):
-        assert demo_users.match(said) == "r.okafor@example.com", said
-    assert demo_users.match("someone else") is None
+    assert demo_users.match("r.okafor@example.com") == "r.okafor@example.com"
+    assert demo_users.match("it's S.Lindqvist@example.com") == "s.lindqvist@example.com"
+    # a name is not an identity, however well the demo knows it
+    assert demo_users.match("Rachel Okafor") is None
+    assert demo_users.match("rachel") is None
     assert demo_users.match("") is None
+    # an analyst this demo never heard of still has an address
+    assert demo_users.match("t.nguyen@acme.test") == "t.nguyen@acme.test"
     # the question names everyone, so an analyst can see who the demo knows
     for user in demo_users.USERS:
-        assert user["name"] in demo_users.WHO_IS_ON_SHIFT
+        assert user["id"] in demo_users.WHO_IS_ON_SHIFT
+    assert "email address" in demo_users.WHO_IS_ON_SHIFT
 
 
 def test_the_question_is_skipped_when_the_client_already_knows(stubbed):

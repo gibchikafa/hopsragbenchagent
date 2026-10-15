@@ -380,11 +380,11 @@ agent_app = AgentApp(
     "ledger, threat intelligence, log investigation, the response playbook, and approval before "
     "anything disruptive (LangGraph workflow over Hopsworks feature-store lookups).",
     framework="langgraph",
-    welcome_message="Who is on shift? Then paste a raw alert — an EDR detection, an IOC "
+    welcome_message="What is your email address? Then paste a raw alert — an EDR detection, an IOC "
     "match or a phishing report — and I'll triage it, check the indicators, investigate "
     "the logs and propose the playbook.",
     suggested_prompts=[
-        "Rachel Okafor",
+        "r.okafor@example.com",
         "SCH_SR_Crowdstrike_IOC_Match/Host:winws1045\nUser m.chen on Host winws1045 (WINDOWS 11 "
         "Workstation, IP 10.12.0.101) alerted: an IP address matched a Custom Intelligence Indicator "
         "(LockbitC2), critical severity. IOC: 198.51.100.42. Process: teams.exe PID 7100, parent explorer.exe.",

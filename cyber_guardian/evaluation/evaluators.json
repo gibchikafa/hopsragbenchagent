@@ -153,7 +153,7 @@
   },
   {
     "name": "Asked who it is talking to",
-    "description": "The first turn asks who is there and does nothing else: no work is done for an unidentified person, because what it learns would be lost with the conversation.",
+    "description": "The first turn asks for an email address and does nothing else: an address is what identifies someone between conversations, and no work is done for someone unidentified.",
     "checks": [
       {
         "type": "llm_judge",
@@ -167,9 +167,9 @@
         ],
         "threshold": 4,
         "criteria": [
-          "Asks who it is talking to before doing the work it was asked for",
-          "Offers the people this demo knows, or accepts the name given",
-          "Does not answer the request until it knows who is there"
+          "Asks for an email address, not a name, before doing the work it was asked for",
+          "Says it needs the address when a name is given instead",
+          "Does not answer the request until it has an address"
         ]
       }
     ]
