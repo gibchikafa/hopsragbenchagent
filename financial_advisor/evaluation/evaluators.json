@@ -36,8 +36,8 @@
       {
         "type": "llm_judge",
         "name": "introduced_itself",
-        "provider": "anthropic",
-        "model": "claude-sonnet-5",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
         "temperature": 0,
         "score_range": [
           1,
@@ -76,8 +76,8 @@
       {
         "type": "llm_judge",
         "name": "advice_carried_the_disclaimer",
-        "provider": "anthropic",
-        "model": "claude-sonnet-5",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
         "temperature": 0,
         "score_range": [
           1,
@@ -116,8 +116,8 @@
       {
         "type": "llm_judge",
         "name": "followed_the_process",
-        "provider": "anthropic",
-        "model": "claude-sonnet-5",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
         "temperature": 0,
         "score_range": [
           1,
