@@ -189,6 +189,15 @@ agent_app = AgentApp(
         long_term=True,
         max_state_value_chars=mem.MAX_REPORT_CHARS,
     ),
+    # Lets a red-team suite run against this deployment. The runner refuses a
+    # sandboxed suite -- one full of injection attempts -- unless the agent
+    # says its tools are safe to point it at. Here they are: the analysts only
+    # read (web search and the reports they pass each other), and the only
+    # writes are to this agent's own memory, under whatever subject the trial
+    # identifies as. The red-team suite identifies as redteam@example.com for
+    # exactly that reason, so nothing it is talked into remembering lands on a
+    # demo user.
+    eval_per_request=True,
     tool_events=True,
 )
 

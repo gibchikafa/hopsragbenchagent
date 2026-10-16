@@ -224,6 +224,13 @@ def apply(agents, publish: bool = False, directory: Path = HERE) -> None:
                 # between a rule someone can see and one hidden in a category.
                 gate_metric=definition.get("gateMetric", ""),
                 gate_threshold=definition.get("gateThreshold"),
+                # A red-team suite: the agent refusing, or a guardrail
+                # stopping it, is the pass. Stated by the suite because it
+                # changes what every number in the run means -- and the SDK
+                # sandboxes it whatever executionMode says, since a suite of
+                # injection attempts must not reach production tools.
+                blocks_are_success=definition.get("blocksAreSuccess", False),
+                run_on_update=definition.get("runOnUpdate", False),
                 checks=[
                     # Copied in, not referenced. The suite is the record of what
                     # a run executed, and a reference would let the library
