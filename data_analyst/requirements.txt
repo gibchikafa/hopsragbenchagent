@@ -1,0 +1,3 @@
+# What the data analyst example needs beyond the python-agent-pipeline image:
+# pandas is already there (the hopsworks package depends on it), the chart is not.
+matplotlib==3.10.9
