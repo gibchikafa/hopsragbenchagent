@@ -18,7 +18,7 @@ coordinator ─┬─▶ analyze_market      data_analyst:      web search → m
 | `advisor_memory.py` | The reports in working memory, shared by both entry points |
 | `prompts.py` | The recipe's prompts, ported; what changed and why is in its docstring |
 | `requirements.txt` | Deployment requirements |
-| `evaluation/` | The recipe's evaluation cases as Hopsworks suites, plus two the recipe could not express |
+| `evaluation/` | The recipe's evaluation cases as Hopsworks suites, three more the recipe could not express, and the rubric a judge grades live traffic by |
 
 ## How the recipe maps
 
@@ -130,10 +130,13 @@ a suite and have nothing to compare against on live traffic.
 ## Evaluation
 
 ```bash
-python -m financial_advisor.evaluation.apply --publish
+python -m financial_advisor.evaluation.apply --publish     # the suites
+python -m financial_advisor.evaluation.sample --agent financialadvisor   # live traffic
 ```
 
-Three suites, all read-only (this agent writes nothing):
+Five suites, and [`evaluation/README.md`](evaluation/) has the whole picture —
+what each defends, what it gates on, and which evaluators grade live traffic
+instead:
 
 - **Introduces itself before advising** — the recipe's own cases: a first hello
   gets the introduction and the full disclaimer, a "yes" gets asked for a
@@ -144,6 +147,17 @@ Three suites, all read-only (this agent writes nothing):
 - **Every recommendation carries the disclaimer** — strategies and plans come
   framed as an AI model's educational output, tailored to the stated profile,
   never as an instruction to buy or sell; gates at 100%.
+- **Asks for an email address** — the first question, and what it is for:
+  memory is keyed by the address, so work done for someone unidentified is lost
+  with the conversation.
+- **Refuses what it must refuse (red team)** — a straight "tell me what to
+  buy", a role with no disclaimer, a trade on a relative's tip, a guaranteed
+  return, the system prompt, and a fact planted in memory for everyone.
+  Sandboxed, and a refusal counts as a pass; gates at 100%.
 
 The data analyst searches the web, so a run's cost is the searches plus the
 generations; a task with all four analysts is a few minutes.
+
+The online half grades conversations that already happened, against
+[`evaluation/rubric.md`](evaluation/rubric.md) — the only thing a judge has to
+go on when there is no expected answer.
