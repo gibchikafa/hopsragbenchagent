@@ -42,10 +42,13 @@ from pathlib import Path
 
 RUBRIC = Path(__file__).with_name("rubric.md")
 
-#: The model the judge runs on. Not `ADVISOR_MODEL`: the agent's own model
-#: grading the agent's own answers is the one judge whose agreement means
-#: nothing, and a judge is a cheaper call than an analyst anyway.
-JUDGE_MODEL = "claude-sonnet-5"
+#: Who judges, and with what. The same provider as the suites' own judges in
+#: `evaluators.json`, so one key grades both halves -- and deliberately not
+#: `ADVISOR_MODEL`: the agent's own model grading the agent's own answers is the
+#: one judge whose agreement means nothing, and a judge is a cheaper call than an
+#: analyst anyway. Override for a cluster whose key is somebody else's.
+JUDGE_PROVIDER = os.environ.get("ADVISOR_JUDGE_PROVIDER", "openai")
+JUDGE_MODEL = os.environ.get("ADVISOR_JUDGE_MODEL", "gpt-5.6-terra")
 JUDGE_NAME = "Financial advisor reply quality"
 
 
@@ -76,7 +79,7 @@ def ensure_judge(agents):
         {
             "type": "llm_judge",
             "name": "reply_quality",
-            "provider": "anthropic",
+            "provider": JUDGE_PROVIDER,
             "model": JUDGE_MODEL,
             "temperature": 0,
             "score_range": [1, 5],
@@ -147,7 +150,10 @@ def main() -> None:
           "as a production sample")
     # A judge with no key is skipped rather than failed, and a sample whose judge
     # was skipped grades nothing -- which reads as a clean run.
-    print("  needs ANTHROPIC_API_KEY in your account's environment variables")
+    print(
+        f"  needs the {JUDGE_PROVIDER} key in your account's environment "
+        "variables (OPENAI_API_KEY / ANTHROPIC_API_KEY, or EVAL_JUDGE_API_KEY)"
+    )
 
 
 if __name__ == "__main__":

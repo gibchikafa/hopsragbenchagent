@@ -53,7 +53,13 @@ python -m financial_advisor.evaluation.sample --agent financialadvisor \
 `rubric.md` is the broad judge: one score for the reply, against a rubric that
 lives in this repo because it is a statement about this agent that will be
 argued over. `evaluators.json` holds the narrow ones, each reading a single
-thing, which is what makes a bad score point somewhere:
+thing, which is what makes a bad score point somewhere.
+
+All of them judge with the same provider -- OpenAI, as the suites' own checks
+already do -- so one key grades both halves: set `OPENAI_API_KEY` as an account
+environment variable and every judge here resolves it. `ADVISOR_JUDGE_PROVIDER`
+and `ADVISOR_JUDGE_MODEL` point the rubric judge somewhere else; a check in
+`evaluators.json` names its own provider, so change it there.
 
 | Evaluator | What it catches |
 |---|---|
