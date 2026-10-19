@@ -24,30 +24,25 @@ INVESTMENT_PERIOD = "user_investment_period"
 EXECUTION_PREFERENCES = "user_execution_preferences"
 
 
-def _memory_and_owner():
-    """The store and this conversation's id, resolved the way the SDK's own tools do."""
-    ctx = current_context.get(None)
-    if ctx is None or ctx.memory is None:
-        return None, None
-    return ctx.memory, ctx.conversation_id
-
-
 def read(key: str) -> str:
-    memory, owner = _memory_and_owner()
-    if memory is None:
+    """One report, or "" when the step that writes it has not run."""
+    ctx = current_context.get(None)
+    if ctx is None:
         return ""
-    return memory.get_state(SCOPE, owner, key) or ""
+    return ctx.recall(key, scope=SCOPE) or ""
 
 
 def write(key: str, value: str) -> None:
-    memory, owner = _memory_and_owner()
-    if memory is None:
-        return
+    """Store one report for the steps after it.
+
+    Through the context rather than through the store: `session` scope is keyed
+    by the conversation, and that rule lives in one place now. The provenance
+    this fact came from -- the conversation, the turn, the message -- is the
+    context's default, so a report's own row says which exchange produced it.
+    """
     ctx = current_context.get(None)
-    memory.set_state(
-        SCOPE, owner, key, value[:MAX_REPORT_CHARS],
-        source_ref=f'{{"conversation_id": "{owner}", "turn_id": "{ctx.turn_id}"}}',
-    )
+    if ctx is not None:
+        ctx.remember(key, value[:MAX_REPORT_CHARS], scope=SCOPE)
 
 
 def missing(*needed: tuple[str, str]) -> str:

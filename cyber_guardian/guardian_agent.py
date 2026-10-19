@@ -119,9 +119,9 @@ class State(TypedDict, total=False):
 
 def _session_get(key: str) -> Any:
     ctx = current_context.get(None)
-    if ctx is None or ctx.memory is None:
+    if ctx is None:
         return None
-    raw = ctx.memory.get_state("session", ctx.conversation_id, key)
+    raw = ctx.recall(key, scope="session")
     try:
         return json.loads(raw) if raw else None
     except ValueError:
@@ -129,10 +129,12 @@ def _session_get(key: str) -> Any:
 
 
 def _session_set(key: str, value: Any) -> None:
+    # `session` scope is keyed by the conversation, which is what an approval
+    # waiting for an analyst is about. The context knows that; deriving the
+    # owner here is how it gets written somewhere nothing reads.
     ctx = current_context.get(None)
-    if ctx is None or ctx.memory is None:
-        return
-    ctx.memory.set_state("session", ctx.conversation_id, key, json.dumps(value))
+    if ctx is not None:
+        ctx.remember(key, json.dumps(value), scope="session")
 
 
 # ── the nodes ────────────────────────────────────────────────────────────────

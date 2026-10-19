@@ -50,19 +50,12 @@ def _ctx():
     return current_context.get(None)
 
 
-def _memory_and_owner(scope: str = SCOPE):
-    ctx = _ctx()
-    if ctx is None or ctx.memory is None:
-        return None, None
-    return ctx.memory, (ctx.conversation_id if scope == SCOPE else ctx.subject)
-
-
 def get(key: str, default: Any = "", scope: str = SCOPE) -> Any:
     """A value from working memory, JSON-decoded when it was stored as JSON."""
-    memory, owner = _memory_and_owner(scope)
-    if memory is None:
+    ctx = _ctx()
+    if ctx is None:
         return default
-    raw = memory.get_state(scope, owner, key)
+    raw = ctx.recall(key, scope=scope)
     if raw is None or raw == "":
         return default
     try:
@@ -72,14 +65,19 @@ def get(key: str, default: Any = "", scope: str = SCOPE) -> Any:
 
 
 def put(key: str, value: Any, scope: str = SCOPE) -> None:
-    memory, owner = _memory_and_owner(scope)
-    if memory is None:
-        return
-    text = value if isinstance(value, str) else json.dumps(value)
+    """Store one value, under the owner its scope is keyed by.
+
+    Through the context, which owns that rule: `session` by the conversation and
+    `user` by the traveler. Deriving it here was a second copy of it, and state
+    written under the wrong owner is never read back -- nothing reports it, the
+    itinerary is simply empty next turn. The provenance (this conversation, this
+    turn) is the context's default.
+    """
     ctx = _ctx()
-    memory.set_state(
-        scope, owner, key, text,
-        source_ref=json.dumps({"conversation_id": ctx.conversation_id, "turn_id": ctx.turn_id}),
+    if ctx is None:
+        return
+    ctx.remember(
+        key, value if isinstance(value, str) else json.dumps(value), scope=scope
     )
 
 

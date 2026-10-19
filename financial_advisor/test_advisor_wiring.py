@@ -43,6 +43,34 @@ def stubbed(monkeypatch):
         sys.modules.pop(name, None)
     yield
 
+class _FakeContext:
+    """As much of the SDK's handler context as these agents use.
+
+    `recall` and `remember` key `session` by the conversation, which is the rule
+    `HandlerContext` implements. The real one cannot be imported here -- this
+    file stubs the whole SDK out so it needs no cluster, no key and no network
+    -- so the rule is mirrored, and it is under test where it lives:
+    hopsworks-api `tests/agents/test_app.py::TestContextStateWrites`.
+    """
+
+    def __init__(self, memory, conversation_id="conv-1", turn_id="t1"):
+        self.memory = memory
+        self.conversation_id = conversation_id
+        self.turn_id = turn_id
+        self.subject = conversation_id
+
+    def _owner(self, scope: str) -> str:
+        return self.conversation_id if scope == "session" else self.subject
+
+    def recall(self, key, *, scope="user"):
+        return self.memory.get_state(scope, self._owner(scope), key)
+
+    def remember(self, key, value, *, scope="user", source_ref=None):
+        self.memory.set_state(
+            scope, self._owner(scope), key, value, source_ref=source_ref
+        )
+        return True
+
 
 def test_the_agent_imports_with_its_four_analysts(stubbed):
     import advisor_agent  # noqa: PLC0415
@@ -87,7 +115,7 @@ async def test_reports_are_kept_in_this_conversations_working_memory(stubbed):
     memory = mock.MagicMock()
     memory.get_state = lambda scope, owner, key: store.get((scope, owner, key))
     memory.set_state = lambda scope, owner, key, value, **kw: store.__setitem__((scope, owner, key), value)
-    ctx = mock.MagicMock(memory=memory, conversation_id="conv-1", turn_id="t1")
+    ctx = _FakeContext(memory)
     advisor_memory.current_context.get = lambda default=None: ctx
 
     async def fake_analyst(system, brief, llm=None):

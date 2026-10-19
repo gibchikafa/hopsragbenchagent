@@ -69,8 +69,26 @@ def fake_memory(monkeypatch, subject="conv-1"):
     mem.get_state = lambda scope, owner, key: store.get((scope, owner, key))
     mem.set_state = lambda scope, owner, key, value, **kw: store.__setitem__((scope, owner, key), value)
     mem.list_state = lambda scope, owner: [{"key": k, "value": v} for (s, o, k), v in store.items() if s == scope and o == owner]
-    ctx = types.SimpleNamespace(memory=mem, conversation_id="conv-1", subject=subject, turn_id="t1",
-                                state=lambda scope="user": {r["key"]: r["value"] for r in mem.list_state(scope, "conv-1" if scope == "session" else subject)})
+    # `recall` and `remember` key `session` by the conversation and `user` by the
+    # traveler, which is the rule `HandlerContext` implements. The real one
+    # cannot be imported here -- this file stubs the whole SDK out so it needs
+    # no cluster, no key and no network -- so the rule is mirrored, and it is
+    # under test where it lives: hopsworks-api
+    # `tests/agents/test_app.py::TestContextStateWrites`.
+    def owner_of(scope):
+        return "conv-1" if scope == "session" else subject
+
+    ctx = types.SimpleNamespace(
+        memory=mem, conversation_id="conv-1", subject=subject, turn_id="t1",
+        state=lambda scope="user": {
+            r["key"]: r["value"] for r in mem.list_state(scope, owner_of(scope))
+        },
+        recall=lambda key, *, scope="user": mem.get_state(scope, owner_of(scope), key),
+        remember=lambda key, value, *, scope="user", source_ref=None: (
+            mem.set_state(scope, owner_of(scope), key, value, source_ref=source_ref)
+            or True
+        ),
+    )
     monkeypatch.setattr(memory.current_context, "get", lambda default=None: ctx)
     return store
 

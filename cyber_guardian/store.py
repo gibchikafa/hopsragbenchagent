@@ -109,21 +109,24 @@ def _ctx():
 def _session_incidents() -> dict[str, str]:
     """Incidents this conversation opened: dedup_key → incident id."""
     ctx = _ctx()
-    if ctx is None or ctx.memory is None:
+    if ctx is None:
         return {}
     try:
-        return json.loads(ctx.memory.get_state("session", ctx.conversation_id, SESSION_INCIDENTS_KEY) or "{}")
+        return json.loads(ctx.recall(SESSION_INCIDENTS_KEY, scope="session") or "{}")
     except ValueError:
         return {}
 
 
 def _remember_incident(dedup_key: str, incident_id: str) -> None:
     ctx = _ctx()
-    if ctx is None or ctx.memory is None:
+    if ctx is None:
         return
     opened = _session_incidents()
     opened[dedup_key] = incident_id
-    ctx.memory.set_state("session", ctx.conversation_id, SESSION_INCIDENTS_KEY, json.dumps(opened))
+    # Through the context, which keys `session` by the conversation: the owner
+    # is the SDK's rule, and state written under the wrong one is simply never
+    # read back.
+    ctx.remember(SESSION_INCIDENTS_KEY, json.dumps(opened), scope="session")
 
 
 # ── the tools ────────────────────────────────────────────────────────────────

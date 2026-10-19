@@ -47,6 +47,34 @@ def stubbed(monkeypatch):
         sys.modules.pop(name, None)
     yield
 
+class _FakeContext:
+    """As much of the SDK's handler context as these agents use.
+
+    `recall` and `remember` key `session` by the conversation, which is the rule
+    `HandlerContext` implements. The real one cannot be imported here -- this
+    file stubs the whole SDK out so it needs no cluster, no key and no network
+    -- so the rule is mirrored, and it is under test where it lives:
+    hopsworks-api `tests/agents/test_app.py::TestContextStateWrites`.
+    """
+
+    def __init__(self, memory, conversation_id="conv-1", turn_id="t1"):
+        self.memory = memory
+        self.conversation_id = conversation_id
+        self.turn_id = turn_id
+        self.subject = conversation_id
+
+    def _owner(self, scope: str) -> str:
+        return self.conversation_id if scope == "session" else self.subject
+
+    def recall(self, key, *, scope="user"):
+        return self.memory.get_state(scope, self._owner(scope), key)
+
+    def remember(self, key, value, *, scope="user", source_ref=None):
+        self.memory.set_state(
+            scope, self._owner(scope), key, value, source_ref=source_ref
+        )
+        return True
+
 
 def test_the_agent_imports_and_wires_every_node(stubbed):
     import guardian_agent as g  # noqa: PLC0415
@@ -95,8 +123,9 @@ def test_triage_finds_a_duplicate_opened_in_this_conversation(stubbed):
     state: dict = {}
     memory = mock.MagicMock()
     memory.get_state = lambda scope, owner, key: state.get(key)
-    memory.set_state = lambda scope, owner, key, value: state.__setitem__(key, value)
-    store.current_context = types.SimpleNamespace(get=lambda d=None: types.SimpleNamespace(memory=memory, conversation_id="c1"))
+    memory.set_state = lambda scope, owner, key, value, **kw: state.__setitem__(key, value)
+    ctx = _FakeContext(memory, conversation_id="c1")
+    store.current_context = types.SimpleNamespace(get=lambda d=None: ctx)
     store._lookup = lambda view, entry: {"owner": "Team-B", "business_criticality": "Medium", "os": "x", "asset_type": "Server", "ip_address": "10.20.3.16"} if view == store.ASSETS_FG else None
     first = json.loads(store.triage_query("winsrv0221", "EDR_DETECTION"))
     assert first == {"is_duplicate": False, "asset_context": {"owner": "Team-B", "criticality": "Medium", "os": "x", "asset_type": "Server", "ip_address": "10.20.3.16"}}
