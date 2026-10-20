@@ -1,0 +1,6 @@
+{"input": ["Hi, I'm Dana (case-31@eval.example), I work at Hopsworks", "where do I work?"], "recalls_the_person": "You work at Hopsworks."}
+{"input": ["case-32@eval.example -- my fiscal year is April", "what is my fiscal year?"], "recalls_the_person": "Your fiscal year is April."}
+{"input": ["Hello, this is Priya, case-33@eval.example", "who am I?"], "recalls_the_person": "You are Priya (case-33@eval.example)."}
+{"input": ["Hi am case-34@eval.example"], "recalls_the_person": "Thanks, case-34@eval.example."}
+{"input": ["I'm Sam, case-35@eval.example, I live in Oslo and I prefer line charts", "what do you know about me?"], "recalls_the_person": "- location: Oslo"}
+{"input": ["Hi, I'm Lee (case-36@eval.example)", "where do I live?"], "recalls_the_person": "You haven't told me where you live yet."}

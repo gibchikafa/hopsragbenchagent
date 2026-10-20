@@ -434,3 +434,122 @@ def test_a_streamed_reply_carries_the_text_as_deltas_and_the_binary_parts_last(c
         for event, data in events
         if event == "message.delta"
     )
+
+
+# ── the agent decides what to remember and what to recall ─────────────────
+
+
+def test_an_introduction_beats_the_subject_the_client_asserted(client):
+    """The chat panel asserts the logged-in username; a person who says who
+    they are has said it more precisely, and that is what memory is keyed by."""
+    reply = client.post(
+        "/v1/chat", json=message("Hi am dana@example.com", subject="gibson")
+    ).json()
+    text = parts_by_type(reply)["text"][0]["text"]
+    assert text.startswith("Thanks, dana@example.com."), text
+    # Reported to the client, which is how the panel's memory view follows it
+    # and how the trace list shows a subject for the conversation.
+    assert reply["metadata"]["subject"] == "dana@example.com"
+
+
+def test_facts_said_in_passing_are_kept_and_answered_from(client):
+    who = "dana.facts@example.com"
+    first = client.post(
+        "/v1/chat",
+        json=message(f"Hi, I'm Dana ({who}), I work at Hopsworks", subject="gibson"),
+    ).json()
+    text = parts_by_type(first)["text"][0]["text"]
+    assert text.startswith(
+        "Thanks, Dana (dana.facts@example.com). Noted: name Dana, employer Hopsworks."
+    ), text
+
+    def ask(question: str, conversation_id: str | None = None) -> str:
+        reply = client.post(
+            "/v1/chat",
+            json=message(question, conversation_id=conversation_id, subject="gibson"),
+        ).json()
+        return parts_by_type(reply)["text"][0]["text"]
+
+    cid = first["conversation_id"]
+    assert ask("where do I work?", cid) == "You work at Hopsworks."
+    assert ask("who am I?", cid) == "You are Dana (dana.facts@example.com)."
+    assert ask("my fiscal year is April", cid).startswith("Noted: fiscal year April. ")
+    assert ask("what is my fiscal year?", cid) == "Your fiscal year is April."
+    assert ask("where do I live?", cid) == "You haven't told me where you live yet."
+
+    # A new conversation, the address alone: the facts came with the person.
+    again = ask(f"{who} -- what do you know about me?")
+    assert again.startswith("Thanks, Dana (dana.facts@example.com). You are Dana"), (
+        again
+    )
+    assert "- employer: Hopsworks" in again
+    assert "- fiscal year: April" in again
+
+
+def test_a_name_given_before_the_address_is_kept_for_the_person(client):
+    first = client.post(
+        "/v1/chat", json=message("Hello, I'm Priya", subject=None)
+    ).json()
+    text = parts_by_type(first)["text"][0]["text"]
+    assert text.startswith(
+        "Nice to meet you, Priya. Before we start, what is your email"
+    ), text
+
+    second = client.post(
+        "/v1/chat",
+        json=message(
+            "priya@example.com", conversation_id=first["conversation_id"], subject=None
+        ),
+    ).json()
+    text = parts_by_type(second)["text"][0]["text"]
+    assert text.startswith("Thanks, Priya (priya@example.com). Noted: name Priya."), (
+        text
+    )
+
+    later = client.post(
+        "/v1/chat", json=message("priya@example.com -- who am I?", subject=None)
+    ).json()
+    assert parts_by_type(later)["text"][0]["text"].endswith(
+        "You are Priya (priya@example.com)."
+    )
+
+
+def test_an_introduction_and_a_question_in_one_message(client):
+    reply = client.post(
+        "/v1/chat",
+        json=message(
+            "Hi, I'm Sam (sam@example.com), I prefer line charts. Total revenue by region",
+            csv_file(SALES),
+            subject=None,
+        ),
+    ).json()
+    parts = parts_by_type(reply)
+    assert set(parts) == {"text", "image", "file"}, "the question was answered"
+    text = parts["text"][0]["text"]
+    assert text.startswith(
+        "Thanks, Sam (sam@example.com). Noted: name Sam, preference line charts. Sum of revenue by region"
+    ), text
+
+
+def test_two_facts_in_one_clause_and_a_bare_introduction(client):
+    who = "two.facts@example.com"
+    first = client.post(
+        "/v1/chat", json=message(f"Hi am {who}", subject="gibson")
+    ).json()
+    text = parts_by_type(first)["text"][0]["text"]
+    assert text.startswith(f"Thanks, {who}. Attach a CSV"), (
+        "a bare introduction is not a question"
+    )
+
+    second = client.post(
+        "/v1/chat",
+        json=message(
+            "I'm Dana, I work at Hopsworks and I prefer line charts",
+            conversation_id=first["conversation_id"],
+            subject="gibson",
+        ),
+    ).json()
+    text = parts_by_type(second)["text"][0]["text"]
+    assert text.startswith(
+        "Noted: name Dana, employer Hopsworks, preference line charts."
+    ), text

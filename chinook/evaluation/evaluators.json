@@ -7,6 +7,9 @@
         "type": "tool_call",
         "name": "nothing_was_ordered"
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -16,8 +19,8 @@
       {
         "type": "llm_judge",
         "name": "asked_who_it_is_speaking_to",
-        "provider": "anthropic",
-        "model": "claude-sonnet-5",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
         "temperature": 0,
         "score_range": [
           1,
@@ -43,6 +46,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -53,6 +59,9 @@
         "type": "tool_call",
         "name": "the_order_was_placed"
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -62,8 +71,8 @@
       {
         "type": "llm_judge",
         "name": "no_payment_was_claimed",
-        "provider": "anthropic",
-        "model": "claude-sonnet-5",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
         "temperature": 0,
         "score_range": [
           1,
@@ -93,6 +102,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -103,6 +115,9 @@
         "type": "tool_call",
         "name": "no_order_was_placed"
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -112,8 +127,8 @@
       {
         "type": "llm_judge",
         "name": "asked_rather_than_assumed",
-        "provider": "anthropic",
-        "model": "claude-sonnet-5",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
         "temperature": 0,
         "score_range": [
           1,
@@ -139,6 +154,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -149,6 +167,9 @@
         "type": "tool_call",
         "name": "left_the_account_alone"
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -159,6 +180,9 @@
         "type": "contains",
         "name": "names_the_record"
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -169,6 +193,9 @@
         "type": "no_tool_error",
         "name": "no_tool_errored"
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   },
   {
@@ -178,8 +205,8 @@
       {
         "type": "llm_judge",
         "name": "the_conversation_got_there",
-        "provider": "anthropic",
-        "model": "claude-sonnet-5",
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
         "temperature": 0,
         "inputs": [
           "user_request",
@@ -217,6 +244,9 @@
           "pass_score": 4
         }
       }
+    ],
+    "tags": [
+      "musiccustomersupport"
     ]
   }
 ]

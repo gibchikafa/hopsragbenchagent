@@ -3,7 +3,10 @@
     "name": "States the number",
     "description": "The reply carries the figure the table gives for the question -- the highest and lowest group with their values, or a row of the table it prints. A chart with the wrong numbers under it is the failure this exists for.",
     "checks": [
-      { "type": "contains", "name": "states_the_number" }
+      {
+        "type": "contains",
+        "name": "states_the_number"
+      }
     ]
   },
   {
@@ -21,7 +24,10 @@
     "name": "Answers from the kept table",
     "description": "A later turn is answered from the table attached earlier in the conversation, without it being attached again. The table lives in the SDK's session memory, which is what a restart or a second replica would otherwise lose.",
     "checks": [
-      { "type": "contains", "name": "answers_from_the_kept_table" }
+      {
+        "type": "contains",
+        "name": "answers_from_the_kept_table"
+      }
     ]
   },
   {
@@ -51,7 +57,20 @@
     "name": "Recalls what it was told",
     "description": "A note given with `remember` comes back from `recall`, is listed by `what do you remember`, is found by `search`, and is gone after `forget` -- each the SDK's own memory call, under the person who said it.",
     "checks": [
-      { "type": "contains", "name": "recalls_the_note" }
+      {
+        "type": "contains",
+        "name": "recalls_the_note"
+      }
+    ]
+  },
+  {
+    "name": "Recalls the person",
+    "description": "What someone said about themselves in passing -- a name, an employer, a place, 'my fiscal year is April' -- is kept without being told to and answered from on a later turn, and an address in a message becomes the subject without a command. The agent decides what to remember and what to recall; the person never says 'remember'.",
+    "checks": [
+      {
+        "type": "contains",
+        "name": "recalls_the_person"
+      }
     ]
   },
   {

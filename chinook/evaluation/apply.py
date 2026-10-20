@@ -196,7 +196,9 @@ def apply(agents, publish: bool = False, directory: Path = HERE) -> None:
         if entry["name"] in saved:
             print(f"= {entry['name']} (library, exists)")
             continue
-        agents.evaluators.save(entry["name"], entry["checks"], entry["description"])
+        agents.evaluators.save(
+            entry["name"], entry["checks"], entry["description"], tags=entry.get("tags")
+        )
         print(f"+ {entry['name']} (library)")
 
     existing = {}

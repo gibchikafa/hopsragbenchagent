@@ -2,11 +2,17 @@
   {
     "name": "Answers the numbers",
     "description": "Aggregate questions on the sample table, each with the figure the table gives: sum, average, median, count, max and min, by a column and by a period of the date column, plus describe. The agent is deterministic, so the bar is every case.",
-    "tags": ["data-analyst", "golden"],
+    "tags": [
+      "data-analyst",
+      "golden"
+    ],
     "executionMode": "read_only",
     "passPolicy": "all",
     "passThreshold": 1.0,
-    "evaluators": ["States the number", "Replies in its own form"],
+    "evaluators": [
+      "States the number",
+      "Replies in its own form"
+    ],
     "tasksFile": "tasks/answers_the_numbers.jsonl",
     "gateMetric": "pass_rate",
     "gateThreshold": 1.0
@@ -14,11 +20,16 @@
   {
     "name": "Keeps the table across turns",
     "description": "The table is attached once and asked about again: a second question, a period after a column, a table attached before the person was known, and the last question in what the agent remembers. All of it is the SDK's session and user memory, read back on a later turn.",
-    "tags": ["data-analyst", "memory"],
+    "tags": [
+      "data-analyst",
+      "memory"
+    ],
     "executionMode": "read_only",
     "passPolicy": "all",
     "passThreshold": 1.0,
-    "evaluators": ["Answers from the kept table"],
+    "evaluators": [
+      "Answers from the kept table"
+    ],
     "tasksFile": "tasks/keeps_the_table_across_turns.jsonl",
     "gateMetric": "pass_rate",
     "gateThreshold": 1.0
@@ -26,11 +37,18 @@
   {
     "name": "Asks who it is talking to",
     "description": "A turn with no address and no asserted subject is asked for one, whether it brought a table, a question or a memory command, and nothing is answered before that. The identity gate is what keys long-term memory, so this is the suite that guards every other.",
-    "tags": ["data-analyst", "identity", "safety"],
+    "tags": [
+      "data-analyst",
+      "identity",
+      "safety"
+    ],
     "executionMode": "read_only",
     "passPolicy": "all",
     "passThreshold": 1.0,
-    "evaluators": ["Asks for the email", "Does not analyse an unknown person"],
+    "evaluators": [
+      "Asks for the email",
+      "Does not analyse an unknown person"
+    ],
     "tasksFile": "tasks/asks_who_it_is_talking_to.jsonl",
     "gateMetric": "pass_rate",
     "gateThreshold": 1.0
@@ -38,12 +56,35 @@
   {
     "name": "Remembers, recalls and forgets",
     "description": "The memory commands, across turns of one conversation: remember then recall, remember then list, remember then forget then recall, remember then search, recall of nothing, and forget everything. Each case is its own person, so a run never meets another case's notes.",
-    "tags": ["data-analyst", "memory"],
+    "tags": [
+      "data-analyst",
+      "memory"
+    ],
     "executionMode": "read_only",
     "passPolicy": "all",
     "passThreshold": 1.0,
-    "evaluators": ["Recalls what it was told"],
+    "evaluators": [
+      "Recalls what it was told"
+    ],
     "tasksFile": "tasks/remembers_recalls_and_forgets.jsonl",
+    "gateMetric": "pass_rate",
+    "gateThreshold": 1.0
+  },
+  {
+    "name": "Knows who it is talking to without being told",
+    "description": "An introduction is enough: the address becomes the subject, a name, an employer, a place or 'my fiscal year is April' is kept as a fact, and 'where do I work?', 'who am I?' and 'what do you know about me?' are answered from memory on a later turn. No remember or recall command anywhere.",
+    "tags": [
+      "data-analyst",
+      "memory",
+      "identity"
+    ],
+    "executionMode": "read_only",
+    "passPolicy": "all",
+    "passThreshold": 1.0,
+    "evaluators": [
+      "Recalls the person"
+    ],
+    "tasksFile": "tasks/knows_who_it_is_talking_to.jsonl",
     "gateMetric": "pass_rate",
     "gateThreshold": 1.0
   }

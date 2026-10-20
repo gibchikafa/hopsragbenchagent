@@ -67,8 +67,8 @@ def ensure_judge(agents):
             {
                 "type": "llm_judge",
                 "name": "conversation_quality",
-                "provider": "anthropic",
-                "model": "claude-sonnet-5",
+                "provider": "openai",
+                "model": "gpt-5.6-terra",
                 "temperature": 0,
                 "score_range": [1, 5],
                 "criteria": {
@@ -116,7 +116,7 @@ def main() -> None:
           "as a production sample")
     # A judge with no key is skipped rather than failed, and a sample whose judge
     # was skipped grades nothing -- which reads as a clean run.
-    print("  needs ANTHROPIC_API_KEY in your account's environment variables")
+    print("  needs OPENAI_API_KEY in your account's environment variables")
 
 
 if __name__ == "__main__":

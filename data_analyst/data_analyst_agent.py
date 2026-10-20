@@ -33,19 +33,26 @@ Memory, in three tiers, with no model driving any of it:
 - Short-term memory is a rolling summary of older turns, folded by a rule
   (`fold`) that keeps the questions and drops the inlined attachments, which
   would otherwise sit in the transcript at full length.
-- Long-term memory is keyed by the person, so the agent first asks for an
-  email address, as the other examples do, and binds the conversation to it
-  with `ctx.rebind_subject`. Under that subject it remembers the last table
-  (the CSV itself, when small) and the last question, so a returning user is
-  greeted with what they analysed last time and can ask straight away. A
-  client that already knows who it is speaking to asserts `subject` on the
-  request and the question is skipped.
-- The memory operations the other examples give a model as tools --
-  `remember`, `recall`, `forget`, `search` -- are commands here, since there
-  is no model to call them: "remember fiscal year: starts in April",
-  "recall fiscal year", "what do you remember", "forget fiscal year",
-  "search revenue". Each is the SDK call the tool makes (`ctx.remember`,
-  `ctx.recall`, `ctx.forget`, `memory.search`), keyed by the person.
+- Long-term memory is keyed by the person. An introduction in the
+  conversation -- "Hi, I'm Dana, dana@example.com" -- is what identifies them:
+  the address becomes the subject (`ctx.rebind_subject`), even when the
+  client asserted one, as the Hopsworks chat panel does with the logged-in
+  username. A conversation that never says who it is with is asked once, as
+  the other examples ask. A client with a login that asserts a real subject
+  is never asked.
+- What goes into memory and what comes back out is the agent's decision,
+  not the user's. Statements about the person -- a name, where they work,
+  where they live, what they prefer, "my fiscal year is April" -- are kept
+  as facts under the person (`ctx.remember`) as they are said; the table
+  attached and the question asked are kept as the last table. On a later
+  turn they are read back without being asked for: the greeting uses the
+  name, the last table is there to analyse, and a question about the person
+  ("where do I work?", "what's my fiscal year?", "what do you know about
+  me?") is answered from the facts (`ctx.state`, `ctx.recall`). "Forget my
+  employer" / "forget everything" erase (`ctx.forget`), and "search
+  <words>" looks through earlier conversations (`memory.search`). The
+  explicit `remember <key>: <value>` / `recall <key>` forms still work, for
+  a fact the rules would not pick up.
 """
 
 from __future__ import annotations
@@ -117,9 +124,74 @@ ASK_EMAIL = (
     "analysed for next time."
 )
 MEMORY_HELP = (
-    "I also keep notes for you: 'remember <key>: <value>', 'recall <key>', "
-    "'what do you remember', 'forget <key>', and 'search <words>' looks through "
-    "our earlier conversations."
+    "Tell me about yourself as we go -- your name, where you work, what you "
+    "prefer -- and I keep it for next time without being asked; ask me what I "
+    "know about you whenever you like."
+)
+#: Whole-sentence statements about the person, kept as facts without being
+#: told to. The key names what the fact is, as the memory tab shows it.
+INTRODUCTIONS: list[tuple[str, re.Pattern[str]]] = [
+    # the lead-in in any case, the name capitalised: "I'm happy" is not a name
+    (
+        "name",
+        re.compile(
+            r"\b(?i:my name is|call me|this is|i am|i'm|im)\s+"
+            r"(?P<v>[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)?)(?=[\s,.;!)(]|$)"
+        ),
+    ),
+    (
+        "employer",
+        re.compile(
+            r"\bi (?:work|am working|'m working) (?:at|for|with)\s+(?P<v>.+?)(?=[.,;!?\n]|\s+(?:and|but|while|so)\s+|$)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "location",
+        re.compile(
+            r"\bi (?:live|am based|'m based|am located|'m located) in\s+(?P<v>.+?)(?=[.,;!?\n]|\s+(?:and|but|while|so)\s+|$)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "location",
+        re.compile(
+            r"\bi(?: am|'m) from\s+(?P<v>.+?)(?=[.,;!?\n]|\s+(?:and|but|while|so)\s+|$)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "role",
+        re.compile(
+            r"\bi(?: am|'m) an?\s+(?P<v>.+?)(?=[.,;!?\n]|\s+(?:and|but|while|so)\s+|$)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "preference",
+        re.compile(
+            r"\bi (?:prefer|like|'d like|would like|want)\s+(?P<v>.+?)(?=[.,;!?\n]|\s+(?:and|but|while|so)\s+|$)",
+            re.IGNORECASE,
+        ),
+    ),
+]
+#: "my fiscal year is April": the thing named is the key.
+MY_THING_IS = re.compile(
+    r"\bmy (?P<k>[a-z][a-z ]{1,30}?) (?:is|are|starts|start)\s+(?P<v>.+?)(?=[.,;!?\n]|\s+(?:and|but|while|so)\s+|$)",
+    re.IGNORECASE,
+)
+#: Questions about the person, answered from the facts rather than the table.
+ABOUT_ME = re.compile(
+    r"^(?:what(?:'s| is| are) my (?P<k>[a-z][a-z ]{1,30}?)|where do i (?P<where>work|live)|who am i|what do you (?:know|remember) about me|what did i (?:ask|analyse|analyze|look at) last time)\s*\??$",
+    re.IGNORECASE,
+)
+#: What is left of "Hi am dana@example.com" once the address is gone: not a question.
+FILLER = frozenset(
+    "am i im is it its here email address my me this mail hi hello hey".split()
+)
+GREETINGS = re.compile(
+    r"^(?:hi|hello|hey|good (?:morning|afternoon|evening)|thanks|thank you)\b[\s,.!]*",
+    re.IGNORECASE,
 )
 #: The memory commands, matched at the start of the question.
 REMEMBER = re.compile(
@@ -202,7 +274,7 @@ app = AgentApp(
     memory=memory,
     welcome_message=f"Hello! {HELP} {ASK_EMAIL}",
     suggested_prompts=[
-        "dana@example.com",
+        "Hi, I'm Dana (dana@example.com), I work at Hopsworks",
         "describe the data",
         "total revenue by region",
         "average price by category",
@@ -374,25 +446,135 @@ def _plan(question: str, frame: pd.DataFrame) -> tuple[str, str, str, pd.DataFra
 def _who(ctx, request) -> tuple[str | None, bool]:
     """(the person, whether this turn is where they said who they are).
 
-    A client with a login asserts ``subject`` on the request and nothing is
-    asked. Otherwise the address given earlier in this conversation is in
-    session memory, and failing that the message itself is searched for one.
-    Either way ``rebind_subject`` points durable memory at the person rather
-    than at the conversation.
+    An address in the message is who this is, and it wins: the chat panel
+    asserts the logged-in username as ``subject``, and someone who then
+    writes "Hi, I'm Dana, dana@example.com" has said who they are more
+    precisely than the login did. Failing an address in the message, the one
+    given earlier in this conversation is in session memory; failing that, a
+    client with a login asserted one; failing that, nobody knows yet and the
+    caller asks. ``rebind_subject`` points durable memory at the person, and
+    is what the trace list and the memory view show as the subject.
     """
-    if ctx.has_subject and ctx.subject_source == "client":
-        return ctx.subject, False
+    match = EMAIL.search(request.text)
+    if match is not None:
+        email = match.group(0).lower()
+        already = ctx.state("session").get(SESSION_EMAIL)
+        ctx.rebind_subject(email)
+        if already != email:
+            ctx.remember(SESSION_EMAIL, email, scope="session")
+        return email, already != email
     known = ctx.state("session").get(SESSION_EMAIL)
     if known:
         ctx.rebind_subject(known)
         return known, False
-    match = EMAIL.search(request.text)
+    if ctx.has_subject and ctx.subject_source == "client":
+        return ctx.subject, False
+    return None, False
+
+
+def _facts_in(text: str) -> dict[str, str]:
+    """What the message says about the person, as facts to keep.
+
+    Rules rather than a model: a name after "I'm", an employer after "I work
+    at", a place after "I live in", a preference after "I prefer", and "my
+    <thing> is <value>" for anything else. Each is kept under a key that
+    names it, so "where do I work?" later reads the same key.
+    """
+    text = EMAIL.sub("", ATTACHED_FILE.sub("", text))
+    facts: dict[str, str] = {}
+    for key, pattern in INTRODUCTIONS:
+        match = pattern.search(text)
+        if match and key not in facts:
+            facts[key] = match["v"].strip().strip("()")
+    for match in MY_THING_IS.finditer(text):
+        key = _slug(match["k"])
+        if key and key not in facts:
+            facts[key] = match["v"].strip()
+    return facts
+
+
+def _keep_facts(ctx, facts: dict[str, str]) -> str:
+    """Remember the facts under the person; what was kept, for the reply."""
+    for key, value in facts.items():
+        ctx.remember(key, value)
+    if not facts:
+        return ""
+    return (
+        "Noted: "
+        + ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in facts.items())
+        + ". "
+    )
+
+
+def _without_introductions(question: str, facts: dict[str, str]) -> str:
+    """The question with the sentences about the person taken out.
+
+    "Hi, I'm Dana, I work at Hopsworks -- total revenue by region" is one
+    question and two facts; the facts are kept and the question is answered.
+    """
+    kept = []
+    if set(re.findall(r"[a-z']+", question.lower())) <= FILLER:
+        return ""
+    for sentence in re.split(r"(?<=[.!?])\s+|\s+--\s+|\n+", question):
+        bare = GREETINGS.sub("", sentence).strip(" ,.;!-")
+        if not bare:
+            continue
+        if any(v and v.lower() in sentence.lower() for v in facts.values()) and (
+            re.search(
+                r"\b(?:i am|i'm|im|my |call me|this is|i work|i live|i prefer|i like|i want|i would)",
+                sentence,
+                re.IGNORECASE,
+            )
+        ):
+            continue
+        kept.append(bare)
+    return " ".join(kept).strip()
+
+
+def _about_me(ctx, question: str, email: str) -> str | None:
+    """A question about the person, answered from what is remembered."""
+    match = ABOUT_ME.match(question.strip())
     if match is None:
-        return None, False
-    email = match.group(0).lower()
-    ctx.rebind_subject(email)
-    ctx.remember(SESSION_EMAIL, email, scope="session")
-    return email, True
+        return None
+    state = {k: v for k, v in ctx.state("user").items() if not _is_agent_key(k)}
+    last, _table = _remembered(ctx)
+    if match["where"]:
+        key = "employer" if match["where"] == "work" else "location"
+        value = state.get(key)
+        return (
+            f"You {'work at' if key == 'employer' else 'live in'} {value}."
+            if value
+            else f"You haven't told me where you {match['where']} yet."
+        )
+    if match["k"]:
+        key = _slug(match["k"])
+        value = state.get(key) or ctx.recall(key)
+        if value:
+            return f"Your {match['k'].strip()} is {value}."
+        return f"You haven't told me your {match['k'].strip()} yet; tell me and I'll keep it."
+    lowered = question.lower()
+    if lowered.startswith("who am i"):
+        name = state.get("name")
+        return (
+            f"You are {name} ({email})."
+            if name
+            else f"You are {email}; you haven't told me your name."
+        )
+    if lowered.startswith("what did i"):
+        if last and last.get("question"):
+            return f'Last time you asked "{last["question"]}" about {last["name"]}.'
+        return "We haven't analysed anything yet."
+    lines = [
+        f"You are {state.get('name', email)}"
+        + (f" ({email})." if state.get("name") else ".")
+    ]
+    lines += [
+        f"- {k.replace('_', ' ')}: {v}" for k, v in sorted(state.items()) if k != "name"
+    ]
+    if last:
+        asked = f', last asked "{last["question"]}"' if last.get("question") else ""
+        lines.append(f"- last table: {last['name']} ({last['rows']} rows{asked})")
+    return "\n".join(lines)
 
 
 def _keep_for_conversation(ctx, name: str, raw: str) -> bool:
@@ -664,19 +846,31 @@ async def stream(request, ctx):
         kept = _keep_for_conversation(ctx, name, raw)
 
     email, just_identified = _who(ctx, request)
+    facts = _facts_in(request.text)
     if email is None:
-        # Ask first, as the other examples do; a table that came with the
-        # question is already in session memory, so it need not be attached again.
+        # Ask once, as the other examples do. A table that came with the
+        # question is already in session memory, and a name given with it is
+        # kept there too, to file under the person once they say who they are.
+        if "name" in facts:
+            ctx.remember("name", facts["name"], scope="session")
         text = ASK_EMAIL
+        if "name" in facts:
+            text = f"Nice to meet you, {facts['name']}. {ASK_EMAIL}"
         if attached:
-            text = f"I have {attached[-1][0]} ready. {ASK_EMAIL}"
+            text = f"I have {attached[-1][0]} ready. {text}"
         yield AgentResponse.text(text, usage=_usage(request, text))
         return
 
+    pending = ctx.state("session").get("name")
+    if pending and "name" not in facts and not ctx.recall("name"):
+        facts = {"name": pending, **facts}
+    noted = _keep_facts(ctx, facts)
     for name, frame, raw in attached:
         _keep_for_person(ctx, name, frame, raw)
 
     greeting = ""
+    known = ctx.state("user")
+    who = known.get("name") or email
     table = attached[-1] if attached else _conversation_table(ctx)
     if table is None:
         last, table = _remembered(ctx)
@@ -689,18 +883,24 @@ async def stream(request, ctx):
                 else "attach it again to continue"
             )
             greeting = (
-                f"Welcome back, {email}. Last time you analysed {last['name']} "
+                f"Welcome back, {who}. Last time you analysed {last['name']} "
                 f"({last['rows']} rows); {still}. "
             )
     if not greeting and just_identified:
-        greeting = f"Thanks, {email}. "
+        greeting = f"Thanks, {who}. " if who == email else f"Thanks, {who} ({email}). "
+    greeting += noted
     if attached and not kept:
         greeting += (
             f"{attached[-1][0]} is too big for me to keep between turns, so "
             "attach it with each question. "
         )
 
-    question = _question(request)
+    question = _without_introductions(_question(request), facts)
+    about = _about_me(ctx, question, email) if question else None
+    if about is not None:
+        text = greeting + about
+        yield AgentResponse.text(text, usage=_usage(request, text))
+        return
     answer = _memory_command(ctx, question) if question else None
     if answer is not None:
         text = greeting + answer

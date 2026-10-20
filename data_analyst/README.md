@@ -4,8 +4,8 @@ An agent that takes a file and gives back a picture. You attach a CSV and ask an
 aggregate question -- "total revenue by region", "average units per product", "how
 many orders by month", "describe the data" -- and it answers with three parts: a text
 summary, a PNG chart and a CSV of the aggregated rows. It asks who it is talking to
-first, remembers your table and your notes for next time, and takes `remember`,
-`recall`, `forget` and `search` as commands.
+first, and keeps what you tell it about yourself and what you analysed for next
+time, without being told to.
 
 No model in it, on purpose. Every example here that calls a model makes the reply
 depend on what the model felt like saying; this one is about the protocol between a
@@ -72,36 +72,46 @@ the other examples use, with no model driving any of them:
 
 ### Who it is talking to
 
-Long-term memory is keyed by a person, so the agent asks for an email address before
-it analyses anything, as the other examples do, and binds the conversation to it with
-`ctx.rebind_subject`. The address can come with the question ("dana@example.com --
-total revenue by region"); a table attached before the address is given is kept, so it
-need not be attached again. A client with a login asserts `subject` on the request
-instead and is never asked: `agent.chat(text, subject="dana@example.com")`.
+Long-term memory is keyed by a person, and an introduction is what names them: "Hi,
+I'm Dana, dana@example.com". The address becomes the subject (`ctx.rebind_subject`),
+and it wins over what the client asserted -- the Hopsworks chat panel asserts the
+logged-in username on every request, and someone who then says who they are has said
+it more precisely than the login did. That is also what fills the Subject column in
+the deployment's trace list and what the panel's Memory tab follows. A conversation
+that never says who it is with is asked once, as the other examples ask; a client with
+a login that asserts a real subject (`agent.chat(text, subject="dana@example.com")`)
+is never asked.
 
-A returning person is greeted with what they analysed last time, and the table is
-there to ask about straight away:
+### What it remembers, and when it recalls
 
-```
-> dana@example.com
-Welcome back, dana@example.com. Last time you analysed sales.csv (20 rows); I still
-have it. What would you like to know about sales.csv? ...
-> max revenue by product
-```
+The agent decides. Nobody says "remember":
 
-### remember, recall, forget, search
-
-The four operations the SDK registers as tools for a model are commands here, each the
-same call the tool makes, under the same person:
-
-| Say | Does |
+| You say | It keeps, under you |
 |---|---|
-| `remember fiscal year: starts in April` | `ctx.remember("fiscal_year", "starts in April")` |
-| `remember that the quarter closes on Friday` | the same, keyed by the first words |
-| `recall fiscal year` | `ctx.recall("fiscal_year")` |
-| `what do you remember` | every note, plus the last table |
-| `forget fiscal year` / `forget everything` | `ctx.forget("fiscal_year")` / `ctx.forget()` |
-| `search warehouse` | `memory.search("warehouse", subject=...)` over earlier conversations; keyword matching, since no embedder is configured (add `sentence_transformer_embedder()` and `vector_store_for(...)` for semantic search) |
+| `Hi, I'm Dana, I work at Hopsworks` | `name: Dana`, `employer: Hopsworks` |
+| `I live in Oslo` / `I'm from Oslo` | `location: Oslo` |
+| `I'm a data scientist` | `role: data scientist` |
+| `I prefer line charts` | `preference: line charts` |
+| `my fiscal year is April` | `fiscal_year: April` |
+| a table, and a question about it | `last_table`, and the table itself when under 60 KB |
+
+And nobody says "recall". On a later turn, in this conversation or the next:
+
+| You say | It answers from memory |
+|---|---|
+| `dana@example.com` (a new conversation) | `Welcome back, Dana. Last time you analysed sales.csv (20 rows); I still have it.` |
+| `where do I work?` / `where do I live?` | `You work at Hopsworks.` |
+| `what's my fiscal year?` | `Your fiscal year is April.` |
+| `who am I?` | `You are Dana (dana@example.com).` |
+| `what do you know about me?` | every fact, and the last table |
+| `what did I ask last time?` | the last question and its table |
+
+Each is the SDK's own call under the person: `ctx.remember` to keep, `ctx.state` and
+`ctx.recall` to read back, `ctx.rebind_subject` to say whose. `forget my employer` /
+`forget everything` erase (`ctx.forget`), and `search <words>` looks through earlier
+conversations (`memory.search`, keyword matching since no embedder is configured). The
+explicit `remember <key>: <value>` and `recall <key>` forms still work for a fact the
+rules would not pick up.
 
 The transcript itself records that a file arrived, never its bytes: the panel inlines
 a CSV into the message, and the fold above is what keeps it out of the summary.

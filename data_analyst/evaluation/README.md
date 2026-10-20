@@ -17,7 +17,7 @@ python -m data_analyst.evaluation.apply --publish        # offline: library, sui
 python -m data_analyst.evaluation.sample --agent dataanalyst   # online: real traffic
 ```
 
-Run from the repository root. The four suites, from what this agent can get wrong:
+Run from the repository root. The five suites, from what this agent can get wrong:
 
 - **Answers the numbers** -- sum, average, median, count, max, min, by a column and by a
   period of the date column, and describe, on `sample_sales.csv`. Every case is its own
@@ -29,6 +29,9 @@ Run from the repository root. The four suites, from what this agent can get wron
   memory command.
 - **Remembers, recalls and forgets** -- `remember`, `recall`, `what do you remember`,
   `forget`, `forget everything`, `search`, across the turns of one conversation.
+- **Knows who it is talking to without being told** -- an introduction becomes the
+  subject; a name, an employer, a place or "my fiscal year is April" is kept as a fact
+  and answered from on a later turn, with no `remember` or `recall` said.
 
 Two things cannot be graded this way. A refusal (`total revenue by planet`) is an error
 envelope, which the runner records as an agent error rather than an answer, so the

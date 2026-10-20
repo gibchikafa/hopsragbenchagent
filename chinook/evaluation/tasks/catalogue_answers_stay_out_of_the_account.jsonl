@@ -1,6 +1,6 @@
-{"input": "Which AC/DC albums are in the catalogue?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "Let There Be Rock"}
-{"input": "What songs are on Nevermind?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "Smells Like Teen Spirit"}
-{"input": "Do you have anything by Queen?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "News Of The World"}
-{"input": "What albums do you have by Led Zeppelin?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "Houses Of The Holy"}
-{"input": "What's on News Of The World?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "We Will Rock You"}
-{"input": "Who made the album Ace Of Spades?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "Motörhead"}
+{"input": "My name is Aaron Mitchell, phone +1 (204) 452-6452. Which AC/DC albums are in the catalogue?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "Let There Be Rock"}
+{"input": "My name is Aaron Mitchell, phone +1 (204) 452-6452. What songs are on Nevermind?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "Smells Like Teen Spirit"}
+{"input": "My name is Aaron Mitchell, phone +1 (204) 452-6452. Do you have anything by Queen?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "News Of The World"}
+{"input": "My name is Aaron Mitchell, phone +1 (204) 452-6452. What albums do you have by Led Zeppelin?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "Houses Of The Holy"}
+{"input": "My name is Aaron Mitchell, phone +1 (204) 452-6452. What's on News Of The World?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "We Will Rock You"}
+{"input": "My name is Aaron Mitchell, phone +1 (204) 452-6452. Who made the album Ace Of Spades?", "forbiddenTools": "place_order, purchase_history, remember_interest", "expected": "Motörhead"}

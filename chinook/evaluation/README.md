@@ -169,7 +169,7 @@ not worth blocking a release over.
 ## Judges
 
 Three suites score with an LLM judge. The key comes from the provider's own
-variable — `ANTHROPIC_API_KEY` — set once in your account's environment
+variable — `OPENAI_API_KEY` — set once in your account's environment
 variables, which reaches every job. A judge with no key is skipped rather than
 failed, so a run can report a suite fully passed while the check that would have
 tested the behaviour never ran; the job log says when that happens.
