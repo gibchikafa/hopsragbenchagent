@@ -1,0 +1,6 @@
+{"input": ["case-21@eval.example -- remember fiscal year: starts in April", "recall fiscal year"], "recalls_the_note": "fiscal_year: starts in April"}
+{"input": ["case-22@eval.example -- remember that the quarter closes on Friday", "what do you remember"], "recalls_the_note": "- the_quarter_closes_on: the quarter closes on Friday"}
+{"input": ["case-23@eval.example -- remember fiscal year: starts in April", "forget fiscal year", "recall fiscal year"], "recalls_the_note": "Nothing stored under 'fiscal_year'."}
+{"input": ["case-24@eval.example -- remember the warehouse: moved to Malmo in March", "search warehouse"], "recalls_the_note": "Malmo"}
+{"input": ["case-25@eval.example -- recall something never said"], "recalls_the_note": "Nothing stored under 'something_never_said'."}
+{"input": ["case-26@eval.example -- remember fiscal year: starts in April", "forget everything", "what do you remember"], "recalls_the_note": "I have nothing stored for you yet."}

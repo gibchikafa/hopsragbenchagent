@@ -7,9 +7,15 @@ the parts of a reply, the follow-up without a re-attach, the refusal by name
 and the streamed shape -- so a change to the protocol that breaks the
 template breaks here, not in a deployment.
 
-Needs the `hopsworks[agents]` package plus pandas and matplotlib:
+Memory runs on SQLite here (`DATA_ANALYST_MEMORY_URL`), the same managed
+service the deployment points at the project database. Most cases assert a
+`subject` on the request, the way a client with a login does, so the agent
+does not ask who it is talking to; the identity cases send none and go
+through the email question.
 
-    pip install "hopsworks[agents]" -r requirements.txt pytest httpx
+Needs the `hopsworks[agents,agents-memory]` package plus pandas and matplotlib:
+
+    pip install "hopsworks[agents,agents-memory]" -r requirements.txt pytest httpx
     pytest test_data_analyst_agent.py
 """
 
@@ -18,7 +24,9 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -31,6 +39,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 
 AGENT = Path(__file__).resolve().parent / "data_analyst_agent.py"
+SUBJECT = "tester@example.com"
 
 SALES = (
     "region,product,revenue,units,order_date\n"
@@ -44,6 +53,9 @@ SALES = (
 
 @pytest.fixture(scope="module")
 def example():
+    # One SQLite database for the module: the agent builds its memory at import.
+    memory_dir = tempfile.mkdtemp(prefix="data_analyst_memory_")
+    os.environ["DATA_ANALYST_MEMORY_URL"] = f"sqlite:///{memory_dir}/memory.db"
     spec = importlib.util.spec_from_file_location("data_analyst_agent", AGENT)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -53,16 +65,22 @@ def example():
 
 @pytest.fixture
 def client(example):
-    example._tables.clear()
     return TestClient(example.app)
 
 
-def message(text: str, *parts: dict, conversation_id: str | None = None) -> dict:
+def message(
+    text: str,
+    *parts: dict,
+    conversation_id: str | None = None,
+    subject: str | None = SUBJECT,
+) -> dict:
     body = {
         "message": {"role": "user", "content": [{"type": "text", "text": text}, *parts]}
     }
     if conversation_id:
         body["conversation_id"] = conversation_id
+    if subject:
+        body["subject"] = subject
     return body
 
 
@@ -114,6 +132,11 @@ def test_the_manifest_declares_a_file_in_and_an_image_and_a_file_out(client):
     assert capabilities["attachments"] is True
     assert capabilities["streaming"] is True
     assert capabilities["tool_events"] is True
+    # Memory is served by the SDK: the panel's Memory tab reads these.
+    assert capabilities["conversation_history"] is True
+    memory = capabilities["memory"]
+    assert memory["summary"] is True, "short-term memory: the rule-based fold"
+    assert memory["state"] is True, "long-term memory: remember/recall under the person"
 
 
 def test_a_csv_file_part_is_answered_with_text_a_chart_and_the_numbers(client):
@@ -248,10 +271,142 @@ def test_a_column_the_table_does_not_have_is_refused_by_name(client):
 
 
 def test_a_question_before_any_table_gets_the_help_text(client):
-    reply = client.post("/v1/chat", json=message("total revenue by region")).json()
+    reply = client.post(
+        "/v1/chat",
+        json=message("total revenue by region", subject="nobody@example.com"),
+    ).json()
     parts = parts_by_type(reply)
     assert set(parts) == {"text"}
-    assert "no table for this conversation yet" in parts["text"][0]["text"]
+    assert parts["text"][0]["text"].startswith("Attach a CSV"), parts["text"][0]["text"]
+
+
+# ── identity and memory ───────────────────────────────────────────────────
+
+
+def test_without_a_subject_the_agent_asks_for_an_email_and_keeps_the_table(client):
+    """The other examples ask who they are talking to; so does this one.
+
+    The table that came with the question is already in session memory, so
+    the answer to the question needs no re-attach once the address is given.
+    """
+    first = client.post(
+        "/v1/chat",
+        json=message("total revenue by region", csv_file(SALES), subject=None),
+    ).json()
+    parts = parts_by_type(first)
+    assert set(parts) == {"text"}, "nothing is analysed before the person is known"
+    assert "email address" in parts["text"][0]["text"]
+    assert "I have sales.csv ready" in parts["text"][0]["text"]
+
+    second = client.post(
+        "/v1/chat",
+        json=message(
+            "it's Dana.Smith@Example.com -- total revenue by region",
+            conversation_id=first["conversation_id"],
+            subject=None,
+        ),
+    ).json()
+    parts = parts_by_type(second)
+    assert set(parts) == {"text", "image", "file"}, second["message"]["content"]
+    text = parts["text"][0]["text"]
+    assert text.startswith(
+        "Thanks, dana.smith@example.com. Sum of revenue by region"
+    ), text
+
+    # And the conversation stays bound: a third turn is not asked again.
+    third = client.post(
+        "/v1/chat",
+        json=message(
+            "average units per product",
+            conversation_id=first["conversation_id"],
+            subject=None,
+        ),
+    ).json()
+    assert "Average of units by product" in parts_by_type(third)["text"][0]["text"]
+
+
+def test_a_client_that_asserts_the_subject_is_not_asked(client):
+    reply = client.post(
+        "/v1/chat", json=message("describe the data", csv_file(SALES))
+    ).json()
+    text = parts_by_type(reply)["text"][0]["text"]
+    assert "email" not in text.lower()
+    assert text.startswith("sales.csv: 5 rows, 5 columns.")
+
+
+def test_a_returning_person_gets_their_last_table_back(client):
+    """Long-term memory: a new conversation, the address, and the table is there."""
+    who = "returning@example.com"
+    client.post(
+        "/v1/chat",
+        json=message("total revenue by region", csv_file(SALES), subject=who),
+    )
+
+    back = client.post("/v1/chat", json=message(who, subject=None)).json()
+    text = parts_by_type(back)["text"][0]["text"]
+    assert text.startswith(
+        "Welcome back, returning@example.com. Last time you analysed sales.csv "
+        "(5 rows); I still have it."
+    ), text
+
+    reply = client.post(
+        "/v1/chat",
+        json=message(
+            "max revenue by product",
+            conversation_id=back["conversation_id"],
+            subject=None,
+        ),
+    ).json()
+    parts = parts_by_type(reply)
+    assert set(parts) == {"text", "image", "file"}, "the remembered table was analysed"
+    assert decoded_csv(parts["file"][0]) == [
+        ["product", "revenue"],
+        ["gadget", "700"],
+        ["widget", "500"],
+    ]
+
+
+def test_remember_recall_and_forget_are_the_sdks_own_calls(client):
+    who = "notes@example.com"
+
+    def say(text: str) -> str:
+        reply = client.post("/v1/chat", json=message(text, subject=who)).json()
+        return parts_by_type(reply)["text"][0]["text"]
+
+    assert (
+        say("remember fiscal year: starts in April")
+        == "Remembered fiscal_year: starts in April"
+    )
+    # Each call is a new conversation, under the same person.
+    assert say("recall fiscal year") == "fiscal_year: starts in April"
+    say("remember that the quarter closes on Friday")
+    everything = say("what do you remember")
+    assert "- fiscal_year: starts in April" in everything
+    assert "- the_quarter_closes_on: the quarter closes on Friday" in everything
+    assert say("forget fiscal year") == "Forgot fiscal_year."
+    assert say("recall fiscal year") == "Nothing stored under 'fiscal_year'."
+
+    # Another person sees none of it.
+    other = client.post(
+        "/v1/chat", json=message("what do you remember", subject="other@example.com")
+    ).json()
+    assert (
+        parts_by_type(other)["text"][0]["text"] == "I have nothing stored for you yet."
+    )
+
+
+def test_search_finds_what_was_said_in_an_earlier_conversation(client):
+    who = "searcher@example.com"
+    client.post(
+        "/v1/chat",
+        json=message("remember the warehouse: moved to Malmo in March", subject=who),
+    )
+    found = client.post(
+        "/v1/chat", json=message("search warehouse", subject=who)
+    ).json()
+    text = parts_by_type(found)["text"][0]["text"]
+    assert text.startswith("From earlier conversations, about 'warehouse':"), text
+    assert "Malmo" in text
 
 
 def test_a_streamed_reply_carries_the_text_as_deltas_and_the_binary_parts_last(client):

@@ -1,0 +1,68 @@
+[
+  {
+    "name": "States the number",
+    "description": "The reply carries the figure the table gives for the question -- the highest and lowest group with their values, or a row of the table it prints. A chart with the wrong numbers under it is the failure this exists for.",
+    "checks": [
+      { "type": "contains", "name": "states_the_number" }
+    ]
+  },
+  {
+    "name": "Replies in its own form",
+    "description": "An aggregate question is answered in the agent's one sentence: the aggregate, the value and the group, how many rows it read, and the highest and lowest group. Anything else in that position is the plumbing having failed, not the data.",
+    "checks": [
+      {
+        "type": "regex",
+        "name": "replies_in_form",
+        "pattern": "(Sum|Average|Median|Count|Maximum|Minimum) of \\S+ by \\S+, from \\d+ rows of \\S+: \\d+ groups?\\. Highest: .+ \\(.+\\)\\. Lowest: .+ \\(.+\\)\\.|: \\d+ rows, \\d+ columns\\."
+      }
+    ]
+  },
+  {
+    "name": "Answers from the kept table",
+    "description": "A later turn is answered from the table attached earlier in the conversation, without it being attached again. The table lives in the SDK's session memory, which is what a restart or a second replica would otherwise lose.",
+    "checks": [
+      { "type": "contains", "name": "answers_from_the_kept_table" }
+    ]
+  },
+  {
+    "name": "Asks for the email",
+    "description": "A conversation that has not said who it is with is asked for an email address, as the other example agents ask. Long-term memory is keyed by the person, so analysing first would file the table under nobody.",
+    "checks": [
+      {
+        "type": "regex",
+        "name": "asks_for_the_email",
+        "pattern": "what is your email address"
+      }
+    ]
+  },
+  {
+    "name": "Does not analyse an unknown person",
+    "description": "Nothing is aggregated, described or recalled before the person is known. The reply may say the table is ready; it must not contain an answer.",
+    "checks": [
+      {
+        "type": "regex",
+        "name": "no_analysis_before_identity",
+        "pattern": "(Sum|Average|Median|Count|Maximum|Minimum) of |: \\d+ rows, \\d+ columns|Your last table|Your notes",
+        "should_match": false
+      }
+    ]
+  },
+  {
+    "name": "Recalls what it was told",
+    "description": "A note given with `remember` comes back from `recall`, is listed by `what do you remember`, is found by `search`, and is gone after `forget` -- each the SDK's own memory call, under the person who said it.",
+    "checks": [
+      { "type": "contains", "name": "recalls_the_note" }
+    ]
+  },
+  {
+    "name": "Reply is one of the agent's shapes",
+    "description": "For live traffic, where there is no expected answer: every reply is one of the sentences this agent is written to say. A reply outside them is an exception that reached the user, or the protocol returning something the agent did not. No model, so it grades every conversation.",
+    "checks": [
+      {
+        "type": "regex",
+        "name": "known_shape",
+        "pattern": "(Sum|Average|Median|Count|Maximum|Minimum) of |: \\d+ rows, \\d+ columns|what is your email address|Attach a CSV and ask me|What would you like to know about|Welcome back, |Remembered |Forgot |Nothing stored under|Your last table|Your notes|I have nothing stored for you yet|From earlier conversations|Nothing in our earlier conversations"
+      }
+    ]
+  }
+]
