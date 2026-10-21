@@ -83,6 +83,10 @@ agent_app = AgentApp(
     placeholder="What are you looking for? You can also send a photo...",
     input_modalities=["text", "image"],
     memory=ManagedMemoryService(summarize=openai_summarizer(), long_term=True),
+    # The agent object itself: the SDK reads the handoffs, tools and servers
+    # hanging off it, the way it reads a compiled LangGraph's get_graph(), so
+    # the chat panel's Graph tab shows this agent and the tools it reaches.
+    graph=agent,
     tool_events=True,
 )
 
