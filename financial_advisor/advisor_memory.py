@@ -59,9 +59,9 @@ def write(key: str, value: str) -> None:
 
     Through the context rather than through the store: the scope each key
     belongs to is decided in one place, and `session` scope is keyed by the
-    conversation. The provenance
-    this fact came from -- the conversation, the turn, the message -- is the
-    context's default, so a report's own row says which exchange produced it.
+    conversation. The provenance this fact came from -- the conversation, the
+    turn, the message -- is the context's default, so a report's own row says
+    which exchange produced it.
     """
     ctx = current_context.get(None)
     if ctx is not None:
@@ -80,7 +80,24 @@ def missing(*needed: tuple[str, str]) -> str:
 
 
 def progress_block() -> str:
-    """Which reports exist, so a resumed conversation continues rather than starting over."""
+    """What is already known: about the person, and about this conversation.
+
+    Both halves, and each on its own. The profile used to be shown only
+    alongside a finished report, so a new conversation with someone the agent
+    had met before said nothing about them -- and the model, told to `recall`
+    but not told under which keys, guessed `investment_profile`, got nothing
+    and answered that it knew nothing about a person who had told it twice.
+    What is remembered is put in front of it instead of left to be found.
+    """
+    known = ", ".join(
+        f"{name}: {value}"
+        for name, value in (
+            ("risk attitude", read(RISK_ATTITUDE)),
+            ("investment period", read(INVESTMENT_PERIOD)),
+            ("execution preferences", read(EXECUTION_PREFERENCES)),
+        )
+        if value
+    )
     done = [
         label
         for label, key in (
@@ -89,16 +106,20 @@ def progress_block() -> str:
         )
         if read(key)
     ]
-    if not done:
-        return ""
-    profile = ", ".join(
-        f"{name}: {read(key)}"
-        for name, key in (("ticker", TICKER), ("risk attitude", RISK_ATTITUDE), ("investment period", INVESTMENT_PERIOD))
-        if read(key)
-    )
-    return (
-        "\n\nProgress in this conversation: the " + ", ".join(done)
-        + " report(s) are already done and kept for the later analysts"
-        + (f" ({profile})" if profile else "")
-        + ". Continue from the next step; do not repeat a completed one unless asked."
-    )
+    block = ""
+    if known:
+        block += (
+            "\n\nWhat this person has told you before, which you remembered: "
+            + known
+            + ". Treat it as theirs and say where it came from if asked; do not ask "
+            "for it again, and do not state anything else about them as remembered."
+        )
+    if done:
+        ticker = read(TICKER)
+        block += (
+            "\n\nProgress in this conversation: the " + ", ".join(done)
+            + " report(s) are already done and kept for the later analysts"
+            + (f" (ticker: {ticker})" if ticker else "")
+            + ". Continue from the next step; do not repeat a completed one unless asked."
+        )
+    return block

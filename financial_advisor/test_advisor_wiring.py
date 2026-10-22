@@ -380,6 +380,45 @@ def test_the_disclaimer_rides_with_every_piece_of_advice():
     )
 
 
+def test_what_was_remembered_is_shown_without_being_asked_for():
+    """A new conversation with someone the agent has met says what it knows.
+
+    The profile used to be shown only alongside a finished report, so a fresh
+    conversation said nothing -- and the model, told to `recall` but not told
+    under which keys, guessed one, got nothing, and answered that it knew
+    nothing about a person who had told it twice.
+    """
+    import advisor_memory as mem  # noqa: PLC0415
+
+    stored = {
+        (mem.RISK_ATTITUDE, mem.USER_SCOPE): "moderate",
+        (mem.INVESTMENT_PERIOD, mem.USER_SCOPE): "long-term",
+    }
+
+    class Ctx:
+        def recall(self, key, scope=None):
+            return stored.get((key, scope), "")
+
+    # The module attribute, not its .set(): an earlier test in this file stubs
+    # the protocol package with a mock, so the real ContextVar is not there.
+    class Holder:
+        @staticmethod
+        def get(_default=None):
+            return Ctx()
+
+    original = mem.current_context
+    mem.current_context = Holder
+    try:
+        block = mem.progress_block()
+    finally:
+        mem.current_context = original
+
+    # No report has run in this conversation, and it still says what it knows.
+    assert "moderate" in block and "long-term" in block
+    assert "told you before" in block
+    assert "Progress in this conversation" not in block
+
+
 def test_a_multi_turn_task_checks_the_last_turns_tools():
     """Trajectory checks read the trace of the final turn.
 

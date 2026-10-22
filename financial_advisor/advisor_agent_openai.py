@@ -225,26 +225,31 @@ async def stream(request, ctx):
         raise AgentError("The message content cannot be empty.", code="invalid_request", status_code=400)
     result = Runner.run_streamed(coordinator, _input_items(ctx, request), max_turns=10, run_config=_run_config)
     streamed = False
-    # One run can produce several messages -- a word before a tool call, the
-    # answer after it -- and their deltas arrive back to back. Without this the
-    # two ran together in the reply as "...across conversations.Please reply...",
-    # which is also what the judges and the stored assistant turn then saw.
-    pending_break = False
+    # One turn can produce several message items, and this model often produces
+    # two that say the same thing -- the reply arrived doubled, as
+    # "...identified.Before we get started...identified.", in the stream, in
+    # what the judges were shown and in the stored assistant turn.
+    #
+    # Grouped by output_index, because that is the only boundary available while
+    # the deltas are arriving: RunItemStreamEvents for a turn come after its raw
+    # events, so waiting for message_output_created to separate two messages
+    # cannot work -- both messages' deltas have been yielded by then. The first
+    # item streams live; a later one is held back and emitted at the end only if
+    # it says something the reply does not already contain.
+    first_index: int | None = None
+    parts: dict[int, str] = {}
     async for event in result.stream_events():
         if isinstance(event, RawResponsesStreamEvent):
             if isinstance(event.data, ResponseTextDeltaEvent) and event.data.delta:
-                if pending_break:
-                    pending_break = False
-                    yield "\n\n"
-                streamed = True
-                yield event.data.delta
+                index = getattr(event.data, "output_index", 0)
+                if first_index is None:
+                    first_index = index
+                parts[index] = parts.get(index, "") + event.data.delta
+                if index == first_index:
+                    streamed = True
+                    yield event.data.delta
         elif isinstance(event, RunItemStreamEvent):
             raw = getattr(event.item, "raw_item", None)
-            if event.name == "message_output_created" and streamed:
-                # Deferred, not yielded here: the run ends on a message item, so
-                # emitting the separator now would leave a trailing blank line
-                # on every reply.
-                pending_break = True
             if event.name == "tool_called":
                 await ctx.emit_event(getattr(raw, "name", "tool"), status="running",
                                      message=str(getattr(raw, "arguments", "") or "")[:200],
@@ -252,6 +257,16 @@ async def stream(request, ctx):
             elif event.name == "tool_output":
                 await ctx.emit_event("tool", status="done",
                                      event_id=raw.get("call_id") if isinstance(raw, dict) else getattr(raw, "call_id", None))
+    for index, text in sorted(parts.items()):
+        if index == first_index or not text.strip():
+            continue
+        # Said once. A second item that repeats the first is this model
+        # restating itself; one that adds something is a continuation and gets
+        # a blank line, since the two used to run together mid-sentence.
+        if text.strip() in parts.get(first_index, ""):
+            continue
+        yield "\n\n" + text.strip()
+
     if not streamed:
         final = str(result.final_output or "").strip()
         yield final or "Sorry — I wasn't able to put together a reply just then. Could you try rephrasing?"
