@@ -126,7 +126,12 @@ agent = agents.deploy_agent(
     "data_analyst_agent.py",
     name="dataanalyst",             # a serving name is alphanumeric only
     environment="data_analyst",
-    tracing={"enabled": True},
+    # Priced, or every traced turn costs 0.0 -- free and unpriced read the
+    # same. List prices per million tokens for the model the analyst runs; change them
+    # when you change the model.
+    tracing={"enabled": True,
+             "input_token_price_per_million_tokens": 2.0,
+             "output_token_price_per_million_tokens": 8.0},
 )
 agent.start(await_running=900)   # the first start builds the environment
 ```

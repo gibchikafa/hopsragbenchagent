@@ -119,7 +119,12 @@ agents = hopsworks.login().get_agent_serving()
 agents.deploy_agent("agent_memory/memory_agent.py", name="memorydemo",
                     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
                     git_branch="main",
-                    environment="python-agent-pipeline", tracing={"enabled": True}).start()
+                    environment="python-agent-pipeline", # Priced, or every traced turn costs 0.0 -- free and unpriced read the
+                    # same. List prices per million tokens for MEMORY_DEMO_MODEL; change them
+                    # when you change the model.
+                    tracing={"enabled": True,
+                             "input_token_price_per_million_tokens": 2.0,
+                             "output_token_price_per_million_tokens": 8.0}).start()
 ```
 
 From Python, the second conversation is the interesting one:

@@ -88,7 +88,12 @@ shop = agents.deploy_agent(
     "personalized_shopping/shopping_agent.py", name="webshop",
     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
     git_branch="main",
-    environment="python-agent-pipeline", tracing={"enabled": True},
+    environment="python-agent-pipeline", # Priced, or every traced turn costs 0.0 -- free and unpriced read the
+    # same. List prices per million tokens for WEBSHOP_MODEL (claude-sonnet-4-5); change them
+    # when you change the model.
+    tracing={"enabled": True,
+             "input_token_price_per_million_tokens": 3.0,
+             "output_token_price_per_million_tokens": 15.0},
 )
 shop.start()
 shop.chat("Hello, who are you?").text

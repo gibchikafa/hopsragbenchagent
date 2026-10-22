@@ -9,7 +9,13 @@ through the conversation's working memory exactly as in `advisor_agent.py`,
 so the two entry points are interchangeable on the same deployment history.
 
 Deploy (git-backed, so `prompts.py` and `advisor_memory.py` come along):
-    agents.deploy_agent("financial_advisor/advisor_agent_openai.py", name="financialadvisor-openai", ...)
+    agents.deploy_agent("financial_advisor/advisor_agent_openai.py", name="financialadvisor-openai",
+                        # Priced, or every traced turn costs 0.0, which reads as free
+                        # rather than as unpriced. ADVISOR_OPENAI_MODEL picks the model,
+                        # so set the pair that goes with it.
+                        tracing={"enabled": True,
+                                 "input_token_price_per_million_tokens": 2.0,
+                                 "output_token_price_per_million_tokens": 8.0}, ...)
 """
 
 from __future__ import annotations

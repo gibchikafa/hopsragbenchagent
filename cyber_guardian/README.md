@@ -94,7 +94,12 @@ guardian = agents.deploy_agent(
     "cyber_guardian/guardian_agent.py", name="cyberguardian",
     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
     git_branch="main",
-    environment="python-agent-pipeline", tracing={"enabled": True},
+    environment="python-agent-pipeline", # Priced, or every traced turn costs 0.0 -- free and unpriced read the
+    # same. List prices per million tokens for GUARDIAN_MODEL (claude-sonnet-4-5); change them
+    # when you change the model.
+    tracing={"enabled": True,
+             "input_token_price_per_million_tokens": 3.0,
+             "output_token_price_per_million_tokens": 15.0},
 )
 guardian.start()
 print(guardian.chat(open("cyber_guardian/sample_alerts.txt").read().split("Sample Input 2")[0]).text)

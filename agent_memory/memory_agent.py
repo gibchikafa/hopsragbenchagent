@@ -24,7 +24,14 @@ What it demonstrates, in the order you meet it:
 Deploy it as a single file; it needs no feature store and no data:
 
     agents = hopsworks.login().get_agent_serving()
-    agent = agents.deploy_agent("agent_memory/memory_agent.py", name="memorydemo")
+    agent = agents.deploy_agent(
+        "agent_memory/memory_agent.py", name="memorydemo",
+        # Priced, or every traced turn costs 0.0, which reads as free rather than
+        # as unpriced. MEMORY_DEMO_MODEL picks the model; set the pair that goes
+        # with it.
+        tracing={"enabled": True,
+                 "input_token_price_per_million_tokens": 2.0,
+                 "output_token_price_per_million_tokens": 8.0})
     agent.start()
 """
 

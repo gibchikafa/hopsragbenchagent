@@ -32,6 +32,13 @@ tiers are all ``AgentApp``; the code here is the domain.
 Deploy:
     hops agent create advisor_agent.py --name financialadvisor \
         --environment python-agent-pipeline
+    # The CLI has no tracing flags, and an unpriced deployment reports every turn
+    # at 0.0 -- free and unpriced read the same. Deploy from the SDK instead when
+    # you want cost, passing ADVISOR_MODEL's list prices:
+    #     agents.deploy_agent("financial_advisor/advisor_agent.py", name="financialadvisor",
+    #                         tracing={"enabled": True,
+    #                                  "input_token_price_per_million_tokens": 3.0,
+    #                                  "output_token_price_per_million_tokens": 15.0})
     hops agent start financialadvisor --wait 600
 """
 

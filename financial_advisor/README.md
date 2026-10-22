@@ -84,7 +84,14 @@ whole repository, so that is the simplest way to ship both:
 agents.deploy_agent("financial_advisor/advisor_agent.py", name="financialadvisor",
                     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
                     git_branch="main",
-                    environment="python-agent-pipeline", tracing={"enabled": True}).start()
+                    environment="python-agent-pipeline",
+                    # Priced, or every traced turn costs 0.0 -- free and unpriced read the
+                    # same. List prices per million tokens for ADVISOR_MODEL
+                    # (claude-sonnet-4-5) when this was written; check your provider's, and
+                    # change them when you change the model.
+                    tracing={"enabled": True,
+                             "input_token_price_per_million_tokens": 3.0,
+                             "output_token_price_per_million_tokens": 15.0}).start()
 ```
 
 ## Grading live traffic

@@ -22,7 +22,14 @@ Deploy (git-backed, so `store.py` and `prompts.py` come along):
     agents = hopsworks.login().get_agent_serving()
     agents.deploy_agent("cyber_guardian/guardian_agent.py", name="cyberguardian",
                         git_url="https://github.com/<you>/hopsragbenchagent.git",
-                        git_provider="GitHub", git_branch="main").start()
+                        git_provider="GitHub", git_branch="main",
+                        # Priced, or every traced turn costs 0.0 -- which reads as free
+                        # rather than as unpriced. List prices per million tokens for
+                        # claude-sonnet-4-5 when this was written; check your provider's, and
+                        # change them when you change the model.
+                        tracing={"enabled": True,
+                                 "input_token_price_per_million_tokens": 3.0,
+                                 "output_token_price_per_million_tokens": 15.0}).start()
 """
 
 from __future__ import annotations

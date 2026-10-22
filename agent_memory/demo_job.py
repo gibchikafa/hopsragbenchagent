@@ -157,7 +157,12 @@ def deploy(agents: Any, args: argparse.Namespace) -> Any:
         requirements=requirements,
         environment=args.environment,
         description="Agent memory demo, deployed by demo_job.py",
-        tracing={"enabled": True},
+        # Priced, or every traced turn costs 0.0 -- free and unpriced read the
+        # same. List prices per million tokens for MEMORY_DEMO_MODEL; change them
+        # when you change the model.
+        tracing={"enabled": True,
+                 "input_token_price_per_million_tokens": 2.0,
+                 "output_token_price_per_million_tokens": 8.0},
         **extra,
     )
     set_model_key(agent, args)
