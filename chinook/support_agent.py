@@ -30,7 +30,6 @@ Deploy:
     python feature_pipeline.py            # catalogue name embeddings
     python migrate_to_feature_store.py    # invoices, catalogue, refund ledger
     hops agent create support_agent.py --name chinooksupport \
-        --requirements requirements.txt \
         --environment python-agent-pipeline-meb10000-v1
     hops agent start chinooksupport --wait 600
 """

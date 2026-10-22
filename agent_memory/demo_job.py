@@ -37,7 +37,7 @@ As a job:
                        "appPath": "/Projects/<project>/Resources/demo_job.py",
                        "environmentName": "python-agent-pipeline"})
 
-`memory_agent.py`, `prompts.py` and `requirements.txt` must sit beside this
+`memory_agent.py` and `prompts.py` must sit beside this
 file for the deploy step; with `--git-url` the deployment pulls them from the
 repository instead, and only this script has to be uploaded.
 """
@@ -129,7 +129,11 @@ def deploy(agents: Any, args: argparse.Namespace) -> Any:
         return existing
 
     entry = args.entry or str(HERE / "memory_agent.py")
-    requirements = args.requirements or str(HERE / "requirements.txt")
+    # Nothing by default: the python-agent-pipeline image already carries the
+    # OpenAI Agents SDK, the instrumentation, OpenTelemetry and the hopsworks
+    # client with its agents extras. --requirements is still there for an agent
+    # that needs something beyond it.
+    requirements = args.requirements
     extra: dict[str, Any] = {}
     if args.git_url:
         # the deployment pulls memory_agent.py and prompts.py from the repository,
@@ -140,7 +144,6 @@ def deploy(agents: Any, args: argparse.Namespace) -> Any:
             git_branch=args.git_branch,
         )
         entry = args.entry or "agent_memory/memory_agent.py"
-        requirements = args.requirements or "agent_memory/requirements.txt"
     elif not Path(entry).exists():
         sys.exit(
             f"{entry} not found. Put memory_agent.py beside this script, or pass "

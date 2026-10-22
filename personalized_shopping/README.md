@@ -18,7 +18,6 @@ shopper ──▶ agent ─┬─▶ search_products   vector search over the ca
 | `shopping_agent.py` | The LangGraph agent (`create_react_agent`) served by `AgentApp`, text and image input |
 | `shopping_agent_openai.py` | The same agent on the OpenAI Agents SDK: the store's functions as `function_tool`s |
 | `prompts.py` | The prompt both entry points use |
-| `requirements.txt` | Deployment requirements |
 | `evaluation/` | The recipe's evaluation cases as Hopsworks suites, plus two the website made hard to test |
 
 ## How the recipe maps
@@ -88,7 +87,7 @@ agents = hopsworks.login().get_agent_serving()
 shop = agents.deploy_agent(
     "personalized_shopping/shopping_agent.py", name="webshop",
     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
-    git_branch="main", requirements="personalized_shopping/requirements.txt",
+    git_branch="main",
     environment="python-agent-pipeline", tracing={"enabled": True},
 )
 shop.start()

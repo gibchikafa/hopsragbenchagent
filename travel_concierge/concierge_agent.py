@@ -25,8 +25,7 @@ Deploy (git-backed, so the modules and profiles come along):
     agents = hopsworks.login().get_agent_serving()
     agents.deploy_agent("travel_concierge/concierge_agent.py", name="concierge",
                         git_url="https://github.com/<you>/hopsragbenchagent.git",
-                        git_provider="GitHub", git_branch="main",
-                        requirements="travel_concierge/requirements.txt").start()
+                        git_provider="GitHub", git_branch="main").start()
 """
 
 from __future__ import annotations

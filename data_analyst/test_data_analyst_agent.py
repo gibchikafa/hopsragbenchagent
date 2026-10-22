@@ -15,7 +15,7 @@ through the email question.
 
 Needs the `hopsworks[agents,agents-memory]` package plus pandas and matplotlib:
 
-    pip install "hopsworks[agents,agents-memory]" -r requirements.txt pytest httpx
+    pip install "hopsworks[agents,agents-memory]" matplotlib pytest httpx
     pytest test_data_analyst_agent.py
 """
 

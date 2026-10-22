@@ -33,7 +33,8 @@ from prompts import SYSTEM_PROMPT
 from store import TOOLS as STORE_TOOLS
 
 #: OpenAI by default (the SDK's own default model); "anthropic/claude-sonnet-4-5" and the like go
-#: through LiteLLM, which the requirements bring in
+#: through LiteLLM. The agent image ships openai-agents without that extra,
+#: so a provider-prefixed model needs `litellm` added to the environment.
 MODEL_NAME = os.environ.get("WEBSHOP_OPENAI_MODEL", "")
 
 

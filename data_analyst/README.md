@@ -19,7 +19,6 @@ model-backed analysis and the plumbing stays.
 | File | Purpose |
 |---|---|
 | `data_analyst_agent.py` | The agent: reads the table, answers the question, returns text + PNG + CSV, served by `AgentApp` with the SDK's managed memory |
-| `requirements.txt` | Deployment requirements: matplotlib (pandas and the memory service's SQLAlchemy are already in the agent image) |
 | `sample_sales.csv` | A table to try it with: twenty orders across four regions, three products and three months |
 | `test_data_analyst_agent.py` | The agent in-process, with FastAPI's test client and memory on SQLite: the manifest, both ways a file arrives, the reply's parts, the stream, the email question, a returning person, remember/recall/forget/search |
 | `evaluation/` | Four suites and an online evaluator, no judge anywhere: the numbers, the table across turns, the email question, the memory commands. See [its README](evaluation/README.md) |
@@ -126,15 +125,13 @@ agents = project.get_agent_serving()
 agent = agents.deploy_agent(
     "data_analyst_agent.py",
     name="dataanalyst",             # a serving name is alphanumeric only
-    requirements="requirements.txt",
     environment="data_analyst",
     tracing={"enabled": True},
 )
 agent.start(await_running=900)   # the first start builds the environment
 ```
 
-Or with the CLI: `hops agent create data_analyst_agent.py --name dataanalyst
---requirements requirements.txt --environment data_analyst && hops agent start dataanalyst`.
+Or with the CLI: `hops agent create data_analyst_agent.py --name dataanalyst --environment data_analyst && hops agent start dataanalyst`.
 
 Then open the deployment's chat panel, attach `sample_sales.csv` and ask
 "total revenue by region".
@@ -200,7 +197,7 @@ case also runs in-process in `test_evaluation_cases.py`.
 ## Run the tests
 
 ```bash
-pip install "hopsworks[agents,agents-memory]" -r requirements.txt pytest httpx
+pip install "hopsworks[agents,agents-memory]" matplotlib pytest httpx
 pytest test_data_analyst_agent.py
 ```
 

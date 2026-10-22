@@ -14,7 +14,6 @@ No feature store, no data pipeline, one file to deploy.
 | `memory_agent.py` | The agent: the SDK's memory tools on an OpenAI Agents SDK loop, served by `AgentApp` |
 | `prompts.py` | The prompt, including the two rules the evaluation suites hold it to |
 | `demo_job.py` | Deploys the agent and talks to it, as a Hopsworks job: the job log is the demonstration |
-| `requirements.txt` | Deployment requirements |
 | `evaluation/` | Three suites: what it stored, what it must never invent, and when not to look things up |
 
 ## The memory tiers
@@ -58,7 +57,7 @@ python demo_job.py --strict        # exit 1 if a tier did not do its job
 ```
 
 Create it as a job with `python-agent-pipeline` as the environment. Upload
-`demo_job.py` alongside `memory_agent.py`, `prompts.py` and `requirements.txt`, or
+`demo_job.py` alongside `memory_agent.py` and `prompts.py`, or
 upload only the script and pass `--git-url` so the deployment pulls the agent from the
 repository.
 
@@ -108,8 +107,7 @@ it.
 ## Deploy
 
 ```bash
-hops agent create memory_agent.py --name memorydemo \
-    --requirements requirements.txt --environment python-agent-pipeline
+hops agent create memory_agent.py --name memorydemo --environment python-agent-pipeline
 hops agent start memorydemo --wait 600
 ```
 
@@ -120,7 +118,7 @@ simplest way to ship both:
 agents = hopsworks.login().get_agent_serving()
 agents.deploy_agent("agent_memory/memory_agent.py", name="memorydemo",
                     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
-                    git_branch="main", requirements="agent_memory/requirements.txt",
+                    git_branch="main",
                     environment="python-agent-pipeline", tracing={"enabled": True}).start()
 ```
 

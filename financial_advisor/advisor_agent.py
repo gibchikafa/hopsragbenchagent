@@ -30,8 +30,8 @@ itself and cites what it read. Nothing here fetches a page.
 tiers are all ``AgentApp``; the code here is the domain.
 
 Deploy:
-    hops agent create advisor_agent.py --name financialadvisor \\
-        --requirements requirements.txt --environment python-agent-pipeline
+    hops agent create advisor_agent.py --name financialadvisor \
+        --environment python-agent-pipeline
     hops agent start financialadvisor --wait 600
 """
 

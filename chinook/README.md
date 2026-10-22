@@ -20,7 +20,6 @@ intent_classifier ─┬─▶ refund_agent               (gather_info → looku
 | `support_agent_llamaindex.py` | LlamaIndex support agent, served by `AgentApp` |
 | `support_agent_openai.py` | OpenAI Agents SDK support agent, served by `AgentApp` |
 | `support_agent_claude.py` | Claude Agent SDK support agent, served by `AgentApp` |
-| `requirements.txt` | Deployment requirements |
 
 ### Feature groups
 
@@ -131,7 +130,6 @@ python feature_pipeline.py            # catalogue name embeddings
 python migrate_to_feature_store.py    # invoices, catalogue, refund ledger
 
 hops agent create support_agent.py --name chinooksupport \
-    --requirements requirements.txt \
     --environment python-agent-pipeline-meb10000-v1
 hops agent start chinooksupport --wait 600
 ```

@@ -23,8 +23,7 @@ Deploy (git-backed, so `store.py` comes along):
     agents = hopsworks.login().get_agent_serving()
     agents.deploy_agent("personalized_shopping/shopping_agent.py", name="webshop",
                         git_url="https://github.com/<you>/hopsragbenchagent.git",
-                        git_provider="GitHub", git_branch="main",
-                        requirements="personalized_shopping/requirements.txt").start()
+                        git_provider="GitHub", git_branch="main").start()
 """
 
 from __future__ import annotations

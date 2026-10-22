@@ -18,7 +18,6 @@ root_agent ──▶ inspiration_agent ──▶ planning_agent ──▶ bookin
 | `memory.py` | Working memory: the recipe's session state on the SDK's memory tiers; the scenario loader; the day-of segment finder |
 | `types_.py` | The shapes the tools answer in (flights, hotels, the itinerary) |
 | `profiles/` | The recipe's two scenarios: an empty itinerary, and a booked Seattle trip |
-| `requirements.txt` | Deployment requirements |
 | `evaluation/` | The recipe's three evaluation sets as suites, plus one it did not have |
 
 ## Why the OpenAI Agents SDK
@@ -83,7 +82,7 @@ agents = hopsworks.login().get_agent_serving()
 concierge = agents.deploy_agent(
     "travel_concierge/concierge_agent.py", name="concierge",
     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
-    git_branch="main", requirements="travel_concierge/requirements.txt",
+    git_branch="main",
     environment="python-agent-pipeline", tracing={"enabled": True},
 )
 concierge.start()

@@ -22,7 +22,6 @@ other    ─▶ converse
 | `guardian_agent_openai.py` | The recipe's own shape on the OpenAI Agents SDK: an orchestrator whose plan is its prompt, with the analysts as tools |
 | `prompts.py` | The three things the model is asked; what changed from the recipe and why is in its docstring |
 | `sample_alerts.txt` | The recipe's three sample alerts, to paste into the chat |
-| `requirements.txt` | Deployment requirements |
 | `evaluation/` | Suites built from the sample alerts, plus the two-turn cases the recipe could not test |
 
 ## How the recipe maps
@@ -94,7 +93,7 @@ agents = hopsworks.login().get_agent_serving()
 guardian = agents.deploy_agent(
     "cyber_guardian/guardian_agent.py", name="cyberguardian",
     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
-    git_branch="main", requirements="cyber_guardian/requirements.txt",
+    git_branch="main",
     environment="python-agent-pipeline", tracing={"enabled": True},
 )
 guardian.start()

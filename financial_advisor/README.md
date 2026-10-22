@@ -17,7 +17,6 @@ coordinator ─┬─▶ analyze_market      data_analyst:      web search → m
 | `advisor_agent_openai.py` | The same on the OpenAI Agents SDK: the analysts are `Agent`s run by the coordinator's tools, the data analyst with the SDK's web search |
 | `advisor_memory.py` | The reports in working memory, shared by both entry points |
 | `prompts.py` | The recipe's prompts, ported; what changed and why is in its docstring |
-| `requirements.txt` | Deployment requirements |
 | `evaluation/` | The recipe's evaluation cases as Hopsworks suites, three more the recipe could not express, and the rubric a judge grades live traffic by |
 
 ## How the recipe maps
@@ -65,8 +64,7 @@ conversation and the advisor starts from what it already knows.
 ## Deploy
 
 ```bash
-hops agent create advisor_agent.py --name financialadvisor \
-    --requirements requirements.txt --environment python-agent-pipeline
+hops agent create advisor_agent.py --name financialadvisor --environment python-agent-pipeline
 hops agent start financialadvisor --wait 600
 ```
 
@@ -85,7 +83,7 @@ whole repository, so that is the simplest way to ship both:
 ```python
 agents.deploy_agent("financial_advisor/advisor_agent.py", name="financialadvisor",
                     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
-                    git_branch="main", requirements="financial_advisor/requirements.txt",
+                    git_branch="main",
                     environment="python-agent-pipeline", tracing={"enabled": True}).start()
 ```
 

@@ -22,8 +22,7 @@ Deploy (git-backed, so `store.py` and `prompts.py` come along):
     agents = hopsworks.login().get_agent_serving()
     agents.deploy_agent("cyber_guardian/guardian_agent.py", name="cyberguardian",
                         git_url="https://github.com/<you>/hopsragbenchagent.git",
-                        git_provider="GitHub", git_branch="main",
-                        requirements="cyber_guardian/requirements.txt").start()
+                        git_provider="GitHub", git_branch="main").start()
 """
 
 from __future__ import annotations
