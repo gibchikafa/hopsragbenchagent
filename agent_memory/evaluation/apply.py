@@ -32,6 +32,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--publish", action="store_true",
                         help="freeze each suite, which is what makes it runnable")
+    parser.add_argument("--new-version", action="store_true",
+                        help="roll edited files into a project that already has these "
+                             "suites: a new draft version per changed suite, and library "
+                             "entries updated in place")
     parser.add_argument("--project", default=None,
                         help="project name; HOPSWORKS_PROJECT when omitted")
     args = parser.parse_args()
@@ -43,7 +47,7 @@ def main() -> None:
     import hopsworks
 
     project = hopsworks.login(project=args.project)
-    apply(project.get_agent_serving(), publish=args.publish, directory=HERE)
+    apply(project.get_agent_serving(), publish=args.publish, directory=HERE, new_version=args.new_version)
 
 
 if __name__ == "__main__":

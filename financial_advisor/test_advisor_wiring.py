@@ -235,11 +235,46 @@ def test_the_question_is_skipped_when_the_client_already_knows(stubbed):
         has_subject=False, subject="conv-1", subject_source="conversation"
     )
     assert demo_users.already_identified(anonymous) == ""
-    # and so does one the agent worked out itself, which is already past the question
-    worked_out = types.SimpleNamespace(
+    # and one this demo bound from an address given earlier is told so every turn.
+    # A rule the model reads once ("do not call `identify` again") loses to the
+    # standing instruction to ask: it re-identified people on their third turn.
+    bound = types.SimpleNamespace(
         has_subject=True, subject="dana@example.com", subject_source="app"
     )
-    assert demo_users.already_identified(worked_out) == ""
+    note = demo_users.already_identified(bound)
+    assert "dana@example.com" in note
+    assert "do not call `identify`" in note
+
+
+def test_an_address_binds_memory_to_the_person(stubbed):
+    """The half `identify` deliberately does not do, which a demo has to supply.
+
+    `identify` labels the conversation and never rebinds, so `user`-scope facts stay
+    owned by the conversation id and the second conversation as the same person knows
+    nothing -- which is the thing this demo exists to show.
+    """
+    import types  # noqa: PLC0415
+
+    import demo_users  # noqa: PLC0415
+
+    class Ctx(types.SimpleNamespace):
+        def rebind_subject(self, subject):
+            self.subject = subject
+            self.has_subject = True
+            self.subject_source = "app"
+
+    ctx = Ctx(has_subject=False, subject="conv-1", subject_source="conversation")
+    assert demo_users.bind_if_identified(ctx, "I'm dana@example.com") == "dana@example.com"
+    assert ctx.subject == "dana@example.com"
+
+    # the client's own assertion is never overridden by text in a message
+    asserted = Ctx(has_subject=True, subject="marcus@example.com", subject_source="client")
+    assert demo_users.bind_if_identified(asserted, "dana@example.com") == "marcus@example.com"
+
+    # and a turn with no address in it changes nothing
+    plain = Ctx(has_subject=False, subject="conv-1", subject_source="conversation")
+    assert demo_users.bind_if_identified(plain, "Analyze MSFT for me.") == ""
+    assert plain.subject_source == "conversation"
 
 # ── the evaluation set beside the agent ─────────────────────────────────────
 
@@ -415,7 +450,9 @@ def test_what_was_remembered_is_shown_without_being_asked_for():
 
     # No report has run in this conversation, and it still says what it knows.
     assert "moderate" in block and "long-term" in block
-    assert "told you before" in block
+    assert "stored long-term memory" in block
+    # named, because the model guessed "risk_attitude" and was told nothing was stored
+    assert "user_risk_attitude" in block
     assert "Progress in this conversation" not in block
 
 

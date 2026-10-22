@@ -229,6 +229,12 @@ async def stream(request, ctx):
     analyst it calls shows as a progress chip; the analysts' own runs are inner and never stream."""
     if not request.text:
         raise AgentError("The message content cannot be empty.", code="invalid_request", status_code=400)
+    # Before the prompt is built, so this turn is already bound: `identify` labels the
+    # conversation but never keys memory, which is the platform's decision and the right
+    # one -- so binding is the application's job, and in this demo that is here. See
+    # demo_users.bind_if_identified for why taking the address as typed is acceptable
+    # only because these three people are fictional.
+    demo_users.bind_if_identified(ctx, request.text)
     result = Runner.run_streamed(coordinator, _input_items(ctx, request), max_turns=10, run_config=_run_config)
     streamed = False
     # One turn can produce several message items, and this model often produces

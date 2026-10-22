@@ -42,6 +42,12 @@ def main() -> None:
     parser.add_argument(
         "--project", default=None, help="project name; HOPSWORKS_PROJECT when omitted"
     )
+    parser.add_argument(
+        "--new-version",
+        action="store_true",
+        help="roll edited files into a project that already has these suites: a new "
+        "draft version per changed suite, and library entries updated in place",
+    )
     args = parser.parse_args()
 
     if not os.environ.get("HOPSWORKS_API_KEY") and not os.environ.get("REST_ENDPOINT"):
@@ -53,7 +59,12 @@ def main() -> None:
     import hopsworks
 
     project = hopsworks.login(project=args.project)
-    apply(project.get_agent_serving(), publish=args.publish, directory=HERE)
+    apply(
+        project.get_agent_serving(),
+        publish=args.publish,
+        directory=HERE,
+        new_version=args.new_version,
+    )
 
 
 if __name__ == "__main__":

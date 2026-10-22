@@ -79,11 +79,25 @@ published: editing the library afterwards cannot rewrite a suite that has alread
 been run against. The library is for not retyping, not for editing every suite at
 once.
 
-For the same reason `apply.py` creates and never edits a suite. Re-running after
-a change gives you a new version to publish, not a rewrite of the one your last
-results were measured against. A published suite gets no tasks from its file
-either; the server would refuse them, and the file is the record of what the
-next version should hold.
+For the same reason `apply.py` creates and never edits a suite. Re-running it
+plainly leaves everything that already exists exactly as it is, so it is safe to
+run twice and a project keeps its history. A published suite gets no tasks from
+its file either; the server would refuse them, and the file is the record of what
+the next version should hold.
+
+That is also its limit, and it used to be a silent one: edit a task file or a
+library entry, re-run in a project that had already applied the previous round,
+and nothing happened at all — every suite existed, so every suite was skipped.
+`--new-version` is the way through. Each suite whose files differ gets a fresh
+draft version with the new checks and the new tasks, and each library entry whose
+checks differ is updated in place:
+
+```bash
+python -m chinook.evaluation.apply --new-version --publish
+```
+
+Published versions are never touched, so what a past run graded by still means
+what it meant; the new version is a new version, which is the point.
 
 `--publish` freezes a suite only once it has tasks: an empty one has nothing to
 run, and the server refuses it.

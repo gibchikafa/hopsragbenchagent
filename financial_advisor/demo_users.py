@@ -14,6 +14,8 @@ told it, and seeding a profile here taught it to state one it had invented.
 
 from __future__ import annotations
 
+import re
+
 USERS = [
     {"id": "dana@example.com", "name": "Dana"},
     {"id": "marcus@example.com", "name": "Marcus"},
@@ -50,18 +52,59 @@ for, you do not have it, and `recall` returning nothing means exactly that. Neve
 a profile you were not given, and never say you remember something that was not stored."""
 
 
-def already_identified(ctx) -> str:
-    """What to tell the model when the application already said who this is.
+#: An email address in what the user typed. Deliberately loose: a demo takes the
+#: address at face value, because there is nothing here to check it against.
+_ADDRESS = re.compile(r"[^\s<>@,;:]+@[^\s<>@,;:]+\.[A-Za-z]{2,}")
 
-    A real deployment has a login: the client asserts `subject` on each request — the user
-    id or address its own session knows — and the SDK keys memory by it without anyone
-    being asked anything. Asking is what a demo does instead, so the question is skipped
-    whenever the identity arrived with the request.
+
+def claimed_address(text: str) -> str:
+    """The email address the user just gave, if they gave one."""
+    found = _ADDRESS.search(text or "")
+    return found.group(0).strip(".,;:") if found else ""
+
+
+def bind_if_identified(ctx, text: str) -> str:
+    """Make long-term memory follow the person, once they have said who they are.
+
+    This is the half a demo has to supply itself, and it is worth being plain about why.
+    `identify` — the tool the model calls — only *labels* the conversation: it calls
+    `record_subject`, never `rebind_subject`, because rebinding decides whose durable
+    memory a conversation may read and the caller there is a model acting on text a user
+    typed. So with `identify` alone every `remember(scope="user")` is owned by the
+    conversation id, and the second conversation as the same person knows nothing — which
+    is exactly what this demo promises and could not deliver.
+
+    `rebind_subject` is the application's call to make, after the application has verified
+    the person. Here there is no verification: the address is taken as typed, which is
+    acceptable **only** because these are three fictional people and nothing behind them is
+    private. A real deployment asserts `subject` on the request from its own login and
+    never reaches this path.
     """
-    if not getattr(ctx, "has_subject", False) or getattr(ctx, "subject_source", "") != "client":
+    if getattr(ctx, "has_subject", False) and getattr(ctx, "subject_source", "") == "client":
+        return ctx.subject
+    address = claimed_address(text)
+    if address:
+        ctx.rebind_subject(address)
+        return address
+    return ctx.subject if getattr(ctx, "has_subject", False) else ""
+
+
+def already_identified(ctx) -> str:
+    """What to tell the model when it does not need to ask who this is.
+
+    Either the application said so — a real deployment has a login, the client asserts
+    `subject` on each request, and the SDK keys memory by it without anyone being asked
+    anything — or this demo bound it from an address given earlier in the conversation.
+    Both are the application's doing, so neither needs the model to ask again. Told every
+    turn, because a rule it read once ("do not call `identify` again") lost to the
+    standing instruction to ask, and the agent re-identified people on their third turn.
+    """
+    if not getattr(ctx, "has_subject", False):
+        return ""
+    if getattr(ctx, "subject_source", "") not in ("client", "app"):
         return ""
     return (
-        f"\n\nThe application has already identified this person as {ctx.subject}. "
-        "Do not ask who they are. Greet them, call `recall` for what you already know, "
-        "and carry on."
+        f"\n\nThis conversation is already identified as {ctx.subject}, and memory is "
+        "bound to them. Do not ask who they are and do not call `identify`. Greet them, "
+        "call `recall` for what you already know, and carry on."
     )

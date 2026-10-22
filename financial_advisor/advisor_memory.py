@@ -109,11 +109,22 @@ def progress_block() -> str:
     block = ""
     if known:
         block += (
-            "\n\nWhat this person has told you before, which you remembered: "
+            "\n\nThis is your stored long-term memory of this person, read back for you: "
             + known
-            + ". Treat it as theirs and say where it came from if asked; do not ask "
-            "for it again, and do not state anything else about them as remembered."
+            + ". You have it; you do not need to call `recall` to get it, and you may say "
+            "you remember it. Treat it as theirs and say where it came from if asked; do "
+            "not ask for it again, and do not state anything else about them as remembered."
         )
+    # Named, because the model guessed. Told to `recall` but not told the keys, it asked
+    # for "risk_attitude" and "investment_period", got nothing back, and told a returning
+    # user it had nothing stored about them -- in the same turn the block above was telling
+    # it exactly what it had stored. Either half alone produces that; both together do not.
+    block += (
+        "\n\nIf you do call `recall`, the keys this agent stores under are exactly: "
+        + ", ".join((*ABOUT_THE_PERSON, TICKER, MARKET_ANALYSIS, STRATEGIES,
+                     EXECUTION_PLAN, RISK_EVALUATION))
+        + ". A key you invent returns nothing, which does not mean nothing is stored."
+    )
     if done:
         ticker = read(TICKER)
         block += (

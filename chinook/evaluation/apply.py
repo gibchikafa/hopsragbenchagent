@@ -187,18 +187,70 @@ def import_tasks(suite, checks: list[dict], path: Path) -> int:
     return added
 
 
-def apply(agents, publish: bool = False, directory: Path = HERE) -> None:
+def _checks_of(definition, checks_by_name) -> list[dict]:
+    """A suite's checks, copied in rather than referenced.
+
+    The suite is the record of what a run executed, and a reference would let the
+    library change it after the fact.
+    """
+    return [
+        {
+            "type": check.pop("type"),
+            "name": check.pop("name"),
+            "config": json.dumps(check),
+        }
+        for entry_name in definition["evaluators"]
+        for check in (dict(one) for one in checks_by_name[entry_name])
+    ]
+
+
+def _checks_differ(entry, checks) -> bool:
+    """Whether a library entry's stored checks still match the file's."""
+    def shape(one):
+        one = dict(one)
+        return (one.pop("type", ""), one.pop("name", ""), json.dumps(one, sort_keys=True))
+
+    stored = [
+        (check.type, check.name, json.dumps(check.settings, sort_keys=True))
+        for check in (entry.checks or [])
+    ]
+    return stored != [shape(one) for one in checks]
+
+
+def apply(agents, publish: bool = False, directory: Path = HERE,
+          new_version: bool = False) -> None:
+    """Put this directory's library, suites and cases into a project.
+
+    Idempotent by default: anything already there is left exactly as it is, so running
+    this twice changes nothing and a project that has run suites keeps its history.
+
+    That default is also the limit, and ``new_version`` is the way past it. Editing a
+    task file or a library entry and re-running did nothing at all in a project that had
+    run the previous round -- the suite existed, so it was skipped, and the change
+    reached nobody. With ``new_version`` each suite whose file differs gets a fresh draft
+    version carrying the new checks and the new tasks, and each library entry whose
+    checks differ is updated in place. Published versions are untouched, so what past
+    runs graded by still means what it meant.
+    """
     library, suites = load(directory)
 
     # The library first: a suite copies its checks in, so they have to exist as
     # something to copy. Saving is by name, so re-running updates an entry rather
     # than making a second one called the same thing.
     checks_by_name = {}
-    saved = {entry.name for entry in agents.evaluators.list()}
+    saved = {entry.name: entry for entry in agents.evaluators.list()}
     for entry in library:
         checks_by_name[entry["name"]] = entry["checks"]
-        if entry["name"] in saved:
-            print(f"= {entry['name']} (library, exists)")
+        existing_entry = saved.get(entry["name"])
+        if existing_entry is not None:
+            if not new_version or not _checks_differ(existing_entry, entry["checks"]):
+                print(f"= {entry['name']} (library, exists)")
+                continue
+            agents.evaluators.save(
+                entry["name"], entry["checks"], entry["description"],
+                tags=entry.get("tags")
+            )
+            print(f"~ {entry['name']} (library, updated)")
             continue
         agents.evaluators.save(
             entry["name"], entry["checks"], entry["description"], tags=entry.get("tags")
@@ -213,9 +265,23 @@ def apply(agents, publish: bool = False, directory: Path = HERE) -> None:
 
     for definition in suites:
         name = definition["name"]
-        if name in existing:
+        if name in existing and not new_version:
             print(f"= {name} (exists, left alone)")
             suite = existing[name]
+        elif name in existing:
+            suite = existing[name]
+            if suite.published:
+                # A published version is frozen, so the change goes into a new draft
+                # carrying it forward. An unpublished draft is already the place for it.
+                suite = suite.new_version()
+                print(f"~ {name} v{suite.version} (new version)")
+            else:
+                print(f"~ {name} v{suite.version} (draft, updated)")
+            # new_version() copies the checks and not the tasks, and the checks it
+            # copied are the old ones; both are replaced from the files.
+            agents.suites.set_checks(suite, _checks_of(definition, checks_by_name))
+            for task in suite.tasks():
+                task.remove_from_suite()
         else:
             suite = agents.suites.create(
                 name,
@@ -237,18 +303,7 @@ def apply(agents, publish: bool = False, directory: Path = HERE) -> None:
                 # injection attempts must not reach production tools.
                 blocks_are_success=definition.get("blocksAreSuccess", False),
                 run_on_update=definition.get("runOnUpdate", False),
-                checks=[
-                    # Copied in, not referenced. The suite is the record of what
-                    # a run executed, and a reference would let the library
-                    # change it after the fact.
-                    {
-                        "type": check.pop("type"),
-                        "name": check.pop("name"),
-                        "config": json.dumps(check),
-                    }
-                    for entry_name in definition["evaluators"]
-                    for check in (dict(one) for one in checks_by_name[entry_name])
-                ],
+                checks=_checks_of(definition, checks_by_name),
             )
             print(f"+ {name}  {definition['executionMode']}")
 
@@ -291,6 +346,10 @@ def main() -> None:
     parser.add_argument("--project", default=None,
                         help="project name; HOPSWORKS_PROJECT when omitted, and the "
                              "job's own project inside Hopsworks")
+    parser.add_argument("--new-version", action="store_true",
+                        help="roll edited files into a project that already has these "
+                             "suites: a new draft version per changed suite, and library "
+                             "entries updated in place")
     args = parser.parse_args()
 
     if not os.environ.get("HOPSWORKS_API_KEY") and not os.environ.get("REST_ENDPOINT"):

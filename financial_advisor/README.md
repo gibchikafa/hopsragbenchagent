@@ -61,6 +61,21 @@ keyed by the subject, so until someone has identified themselves a risk attitude
 today belongs to the conversation and is lost with it. Give the same address in a second
 conversation and the advisor starts from what it already knows.
 
+**The question alone would not be enough, and the reason is worth reading.** `identify`
+calls `ctx.record_subject`, which *labels* the conversation for traces and failure
+analysis and nothing more. It deliberately never calls `ctx.rebind_subject`, because
+rebinding decides whose durable memory a conversation may read, and the caller there is a
+model acting on text a user typed — an agent that could be talked into reading someone
+else's facts. So with `identify` alone every `remember(scope="user")` stays owned by the
+conversation id, and the second conversation as the same person knows nothing.
+
+Binding is the *application's* call, after the application has verified the person. This
+demo has nothing to verify against, so `demo_users.bind_if_identified` takes the address
+as typed and rebinds — acceptable here **only** because these three people are fictional
+and nothing behind them is private. Do not copy that line into an agent with real users:
+assert `subject` on the request from your own login, as the paragraph above describes, and
+this path is never reached.
+
 ## Deploy
 
 ```bash

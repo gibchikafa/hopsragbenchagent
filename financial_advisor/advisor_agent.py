@@ -307,6 +307,11 @@ async def stream(request, ctx):
             "The message content cannot be empty.", code="invalid_request", status_code=400
         )
 
+    # Bound before the prompt is built: `identify` labels the conversation and never
+    # keys memory, so making long-term memory follow the person is the application's
+    # job. See demo_users.bind_if_identified.
+    demo_users.bind_if_identified(ctx, request.text)
+
     # The prompt, the rolling summary of folded turns, and where the process
     # stands: which reports exist, so a resumed conversation continues rather
     # than starting over.
