@@ -61,12 +61,16 @@ from pathlib import Path
 #: evaluation reuses this module by pointing `apply` at its own directory.
 HERE = Path(__file__).parent
 
-# Two of these make the agent place orders, so they are sandboxed and the runner
-# refuses them unless the deployment reports eval_mode. That means EVAL_MODE=true
-# on a deployment running this agent's eval-mode code, which suppresses the
-# writes — see EVAL_MODE in support_agent.py.
+# Two of these make the agent place orders, so they are sandboxed, and the runner
+# accepts a sandboxed suite only against a deployment that says it can take one:
+# either EVAL_MODE=true on a deployment running this agent's eval-mode code,
+# which suppresses the writes (see EVAL_MODE in support_agent.py), or an agent
+# whose manifest advertises per-request evaluation, AgentApp(eval_per_request=
+# True), which the financial advisor does. Saying only the first sent people
+# off to build a second deployment they did not need.
 SANDBOXED_NOTE = (
-    "sandboxed — needs a deployment with EVAL_MODE=true, or the runner refuses it"
+    "sandboxed — needs a deployment with EVAL_MODE=true or one whose manifest "
+    "advertises eval_per_request, or the runner refuses it"
 )
 
 # What each kind of check reads from a task, which decides where a familiar column

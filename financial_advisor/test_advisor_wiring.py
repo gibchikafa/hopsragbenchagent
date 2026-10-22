@@ -321,3 +321,87 @@ def test_the_agent_lets_a_sandboxed_suite_run_against_it(stubbed):
 
     kwargs = advisor_agent.AgentApp.call_args.kwargs
     assert kwargs["eval_per_request"] is True
+
+
+def test_the_demo_people_carry_no_profile():
+    """A profile the agent invented is worse than none at all.
+
+    Each demo person used to come with a note -- "balanced, wants dividend
+    income" -- and the model read those as facts it already held: it stored one
+    as Priya's profile the first time she spoke and, asked where it came from,
+    said it was already in its memory. Nobody had told it. Addresses identify
+    someone; what the agent knows about them is what they said.
+    """
+    import demo_users  # noqa: PLC0415
+
+    assert all("note" not in person for person in demo_users.USERS)
+    for person in demo_users.USERS:
+        assert person["id"] in demo_users.USERS_BLOCK
+    for invented in ("conservative", "aggressive", "balanced", "dividend"):
+        assert invented not in demo_users.USERS_BLOCK.lower()
+    assert "you know nothing else about these people" in (
+        demo_users.IDENTITY_INSTRUCTIONS.lower()
+    )
+
+
+def test_what_the_person_said_outlives_the_conversation():
+    """Their risk attitude is theirs; the reports are the plan's.
+
+    All of it was written to session scope, so a risk attitude the user had
+    stated out loud was gone by the next chat -- and the agent filled the gap
+    from the demo's own notes and then claimed to have remembered it.
+    """
+    import advisor_memory as mem  # noqa: PLC0415
+
+    assert mem.ABOUT_THE_PERSON == (
+        mem.RISK_ATTITUDE,
+        mem.INVESTMENT_PERIOD,
+        mem.EXECUTION_PREFERENCES,
+    )
+    for key in mem.ABOUT_THE_PERSON:
+        assert mem._scope_for(key) == mem.USER_SCOPE
+    for key in (mem.MARKET_ANALYSIS, mem.STRATEGIES, mem.EXECUTION_PLAN, mem.TICKER):
+        assert mem._scope_for(key) == mem.SCOPE
+
+
+def test_the_disclaimer_rides_with_every_piece_of_advice():
+    """Each analyst's report ends with it, and summarising one dropped it.
+
+    The strategy, execution and risk replies reached the user with no
+    disclaimer at all, which is the one thing this agent must not do.
+    """
+    import prompts  # noqa: PLC0415
+
+    coordinator = prompts.COORDINATOR_PROMPT
+    assert "with every piece of advice" in coordinator
+    assert "do not call `identify` again" in coordinator.lower()
+    assert "do not ask them to confirm a step they have just asked for" in (
+        coordinator.lower()
+    )
+
+
+def test_a_multi_turn_task_checks_the_last_turns_tools():
+    """Trajectory checks read the trace of the final turn.
+
+    The four-turn pipeline task required all four analysts of the last turn and
+    could never pass: that turn calls one of them. The ordering across the
+    conversation is the judge's, which is shown the transcript.
+    """
+    import json  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    path = Path(__file__).parent / "evaluation" / "tasks" / "analysts_run_in_order.jsonl"
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        task = json.loads(line)
+        turns = task["input"] if isinstance(task["input"], list) else [task["input"]]
+        required = json.loads(task["only_the_analysts_needed"])["required"]
+        # One turn may call several analysts -- "I'm conservative, long-term,
+        # propose strategies for MSFT" is the ticker, the attitude and the
+        # horizon, so that turn runs the analysis and then the strategies. What
+        # cannot be asked for is a pipeline the conversation spreads over turns:
+        # the check only sees the last one.
+        if len(turns) > 2:
+            assert len(required) == 1, task["input"]
+            assert "whole conversation" in task["rubric"], task["input"]

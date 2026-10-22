@@ -225,13 +225,26 @@ async def stream(request, ctx):
         raise AgentError("The message content cannot be empty.", code="invalid_request", status_code=400)
     result = Runner.run_streamed(coordinator, _input_items(ctx, request), max_turns=10, run_config=_run_config)
     streamed = False
+    # One run can produce several messages -- a word before a tool call, the
+    # answer after it -- and their deltas arrive back to back. Without this the
+    # two ran together in the reply as "...across conversations.Please reply...",
+    # which is also what the judges and the stored assistant turn then saw.
+    pending_break = False
     async for event in result.stream_events():
         if isinstance(event, RawResponsesStreamEvent):
             if isinstance(event.data, ResponseTextDeltaEvent) and event.data.delta:
+                if pending_break:
+                    pending_break = False
+                    yield "\n\n"
                 streamed = True
                 yield event.data.delta
         elif isinstance(event, RunItemStreamEvent):
             raw = getattr(event.item, "raw_item", None)
+            if event.name == "message_output_created" and streamed:
+                # Deferred, not yielded here: the run ends on a message item, so
+                # emitting the separator now would leave a trailing blank line
+                # on every reply.
+                pending_break = True
             if event.name == "tool_called":
                 await ctx.emit_event(getattr(raw, "name", "tool"), status="running",
                                      message=str(getattr(raw, "arguments", "") or "")[:200],

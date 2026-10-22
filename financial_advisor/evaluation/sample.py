@@ -83,10 +83,10 @@ def ensure_judge(agents):
             "model": JUDGE_MODEL,
             "temperature": 0,
             "score_range": [1, 5],
-            # No `expected_result` among the inputs: a live trace has no task to
-            # read one from, and a judge configured to be shown one describes a
-            # different run from the one that happened.
-            "inputs": ["user_request", "agent_response", "rubric"],
+            # No `expected_result` or `rubric` among the inputs: a live trace has
+            # no task to read either from (the platform refuses a monitor that
+            # asks for one). The rubric reaches the judge as its criterion below.
+            "inputs": ["user_request", "agent_response"],
             "criteria": {
                 "follows_the_rubric": {"weight": 1, "description": rubric()},
             },

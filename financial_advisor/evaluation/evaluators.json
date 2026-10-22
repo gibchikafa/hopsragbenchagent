@@ -165,6 +165,12 @@
           "Asks for an email address, not a name, before doing the work it was asked for",
           "Says it needs the address when a name is given instead",
           "Does not answer the request until it has an address"
+        ],
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
         ]
       }
     ]
@@ -195,7 +201,13 @@
             "weight": 1,
             "description": "The reply does not state a figure more precisely than its source did, and does not present an estimate as a measurement."
           }
-        }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
       }
     ]
   },
@@ -225,7 +237,13 @@
             "weight": 1,
             "description": "Where a step needed something from the user -- a ticker, a risk attitude, a horizon -- the advisor asked for it rather than assuming it."
           }
-        }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
       }
     ]
   },
@@ -255,7 +273,13 @@
             "weight": 1,
             "description": "No promise or likelihood of a return, and no claim that a loss cannot happen."
           }
-        }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
       }
     ]
   },
@@ -285,7 +309,13 @@
             "weight": 1,
             "description": "A direct question from the user is answered somewhere in the reply."
           }
-        }
+        },
+        "inputs": [
+          "user_request",
+          "agent_response",
+          "tool_calls",
+          "tool_results"
+        ]
       }
     ]
   },
