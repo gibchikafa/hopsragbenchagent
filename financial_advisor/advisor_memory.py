@@ -9,6 +9,8 @@ entry points read and write them through this module.
 
 from __future__ import annotations
 
+import re
+
 from hopsworks_agents.protocol.autoevents import current_context
 
 #: a report is a few thousand tokens; the default 4k characters would cut one
@@ -133,4 +135,147 @@ def progress_block() -> str:
             + (f" (ticker: {ticker})" if ticker else "")
             + ". Continue from the next step; do not repeat a completed one unless asked."
         )
-    return block
+    return block + next_step_block()
+
+
+# ── what this turn may do, decided in code ──────────────────────────────────
+#
+# Three rules the prompt stated and the model did not keep at temperature 0: ask
+# only for what is missing (it asked again for a risk attitude it had just been
+# given), one step per turn (it ran the risk evaluation when asked for the plan),
+# and the ticker comes first (it asked for the profile after the introduction).
+# A rule read once in a long prompt loses to whatever else the model weighs, so
+# each is now enforced where the decision is made: the profile is captured from
+# the message before the model runs, an analyst refuses a step this turn did not
+# ask for, and the prompt is told the one next step for this state of the plan.
+
+
+STEPS = ("analysis", "strategies", "plan", "risk")
+_REPORT_OF = {
+    "analysis": MARKET_ANALYSIS,
+    "strategies": STRATEGIES,
+    "plan": EXECUTION_PLAN,
+    "risk": RISK_EVALUATION,
+}
+_STEP_NAME = {
+    "analysis": "the market analysis",
+    "strategies": "the trading strategies",
+    "plan": "the execution plan",
+    "risk": "the risk evaluation",
+}
+_ASKS_FOR = {
+    "analysis": re.compile(r"\banaly[sz]", re.I),
+    "strategies": re.compile(r"\bstrateg", re.I),
+    "plan": re.compile(r"\bplan\b|\bexecut", re.I),
+    # "risk attitude", "risk tolerance" and the like are the profile, not the step
+    "risk": re.compile(
+        r"(?<!-)\brisk\b(?!-|\s+(attitude|tolerance|appetite|profile|level))"
+        r"|\bassess|\bevaluat", re.I),
+}
+_GO_ON = re.compile(
+    r"^\W*(yes|yeah|yep|sure|ok(ay)?|please|go\s+ahead|continue|proceed|next|do\s+it|"
+    r"sounds\s+good|let'?s\s+(go|do\s+it|continue))\b", re.I)
+
+_ATTITUDES = (
+    ("very conservative", r"very\s+conservative"), ("very aggressive", r"very\s+aggressive"),
+    ("conservative", r"conservative|low[\s-]risk|risk[\s-]averse"),
+    ("moderate", r"moderate|balanced|medium[\s-]risk"),
+    ("aggressive", r"aggressive|high[\s-]risk"),
+)
+_PERIODS = (
+    ("intraday", r"intraday|day[\s-]trad"),
+    ("short-term", r"short[\s-]term"),
+    ("medium-term", r"medium[\s-]term|mid[\s-]term|(a\s+few|several|\d+)\s+months"),
+    ("long-term", r"long[\s-]term|(\d+|several|many)\s+years|retirement"),
+)
+
+
+def _turn_text() -> str:
+    ctx = current_context.get(None)
+    request = getattr(ctx, "request", None)
+    return str(getattr(request, "text", "") or "")
+
+
+def _first_match(text: str, table) -> str:
+    for label, pattern in table:
+        if re.search(rf"\b(?:{pattern})", text, re.I):
+            return label
+    return ""
+
+
+def capture_profile(text: str) -> dict[str, str]:
+    """Store the risk attitude and horizon the user just stated, before the model runs.
+
+    So "I'm a conservative, long-term investor. Propose strategies for MSFT" is the
+    profile and the request together: the strategies step reads it from memory, and
+    the prompt says it is known, rather than the model asking for what it was told.
+    Only what the message states plainly is taken; nothing is inferred.
+    """
+    found = {}
+    attitude = _first_match(text, _ATTITUDES)
+    period = _first_match(text, _PERIODS)
+    if attitude:
+        write(RISK_ATTITUDE, attitude)
+        found["risk attitude"] = attitude
+    if period:
+        write(INVESTMENT_PERIOD, period)
+        found["investment period"] = period
+    return found
+
+
+def next_step() -> str:
+    """The first step of the plan whose report does not exist yet, or "" when all are done."""
+    return next((step for step in STEPS if not read(_REPORT_OF[step])), "")
+
+
+def not_this_turn(step: str, text: str | None = None) -> str:
+    """Why an analyst must not run now, or "" when this turn asked for it.
+
+    A step may run when the message asks for it, when it is the prerequisite of a
+    step the message asks for (strategies for a ticker nobody analysed yet), or when
+    the message is a go-ahead and it is the next step. Anything else is the agent
+    running ahead -- the plan asked for and the risk evaluation run as well.
+    """
+    text = _turn_text() if text is None else text
+    asked = {s for s in STEPS if _ASKS_FOR[s].search(text)}
+    if asked:
+        furthest = max(STEPS.index(s) for s in asked)
+        if STEPS.index(step) <= furthest:
+            return ""
+    elif _GO_ON.search(text) and step == next_step():
+        return ""
+    elif not text.strip():
+        return ""
+    wanted = ", ".join(_STEP_NAME[s] for s in sorted(asked, key=STEPS.index)) or "nothing that needs an analyst"
+    return (
+        f"Not run: this turn asked for {wanted}, not {_STEP_NAME[step]}. One step per turn: "
+        f"present what was asked, and offer {_STEP_NAME[step]} as the next step."
+    )
+
+
+def next_step_block() -> str:
+    """The one thing to do next, for this state of the plan, told every turn."""
+    step = next_step()
+    profile = read(RISK_ATTITUDE) and read(INVESTMENT_PERIOD)
+    if step == "analysis":
+        return (
+            "\n\nNext step: the market analysis. If the user has not given a ticker, ask for "
+            "the ticker -- and only the ticker. Do not ask for a risk attitude or an "
+            "investment period yet: they are needed for the strategies, which come after."
+        )
+    if step == "strategies":
+        if profile:
+            return (
+                f"\n\nNext step: the trading strategies. The profile is known ({read(RISK_ATTITUDE)}, "
+                f"{read(INVESTMENT_PERIOD)}), so do not ask for it: call propose_strategies when "
+                "the user wants the strategies."
+            )
+        return (
+            "\n\nNext step: the trading strategies. Ask for whichever of the risk attitude and "
+            "the investment period you do not have yet, and nothing else."
+        )
+    if step == "plan":
+        return "\n\nNext step: the execution plan, for the strategy the user chooses."
+    if step == "risk":
+        return "\n\nNext step: the risk evaluation of the whole plan."
+    return ""

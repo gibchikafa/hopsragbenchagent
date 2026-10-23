@@ -90,18 +90,27 @@ async def analyze_market(ticker: str) -> str:
 
 
 @function_tool
-async def propose_strategies(risk_attitude: str, investment_period: str) -> str:
+async def propose_strategies(risk_attitude: str = "", investment_period: str = "") -> str:
     """The trading analyst: five or more strategies for the analyzed ticker and this profile.
     Reads the market analysis itself; call analyze_market first.
 
     Args:
-        risk_attitude: The user's attitude to risk, e.g. conservative, moderate, aggressive.
-        investment_period: The user's timeframe, e.g. short-term, medium-term, long-term.
+        risk_attitude: The user's attitude to risk, e.g. conservative, moderate, aggressive; empty to use the one already known.
+        investment_period: The user's timeframe, e.g. short-term, medium-term, long-term; empty to use the one already known.
     """
+    if problem := mem.not_this_turn("strategies"):
+        return problem
     if problem := mem.missing(("market analysis (market_data_analysis_output)", mem.MARKET_ANALYSIS)):
         return problem
-    mem.write(mem.RISK_ATTITUDE, risk_attitude.strip())
-    mem.write(mem.INVESTMENT_PERIOD, investment_period.strip())
+    # What the user already said wins over asking: a profile stated in this message
+    # was captured before the model ran, and one from an earlier conversation is in memory.
+    risk_attitude = risk_attitude.strip() or mem.read(mem.RISK_ATTITUDE)
+    investment_period = investment_period.strip() or mem.read(mem.INVESTMENT_PERIOD)
+    if not (risk_attitude and investment_period):
+        return ("Not run: the risk attitude and the investment period are both needed. "
+                "Ask the user for whichever is missing.")
+    mem.write(mem.RISK_ATTITUDE, risk_attitude)
+    mem.write(mem.INVESTMENT_PERIOD, investment_period)
     report = await _report(
         trading_analyst,
         f"user_risk_attitude: {risk_attitude}\nuser_investment_period: {investment_period}\n\n"
@@ -120,6 +129,8 @@ async def plan_execution(selected_strategy: str = "", execution_preferences: str
         selected_strategy: The strategy the user chose, by name or description; empty to plan for the set.
         execution_preferences: The user's execution preferences, such as broker or order types; empty when none.
     """
+    if problem := mem.not_this_turn("plan"):
+        return problem
     if problem := mem.missing(("trading strategies (proposed_trading_strategies_output)", mem.STRATEGIES)):
         return problem
     mem.write(mem.EXECUTION_PREFERENCES, execution_preferences.strip())
@@ -139,6 +150,8 @@ async def plan_execution(selected_strategy: str = "", execution_preferences: str
 async def assess_risk() -> str:
     """The risk analyst: the whole plan, analysis to execution, against the user's profile.
     Takes no input; reads the three earlier reports and the profile itself. Call it last."""
+    if problem := mem.not_this_turn("risk"):
+        return problem
     if problem := mem.missing(
         ("market analysis (market_data_analysis_output)", mem.MARKET_ANALYSIS),
         ("trading strategies (proposed_trading_strategies_output)", mem.STRATEGIES),
@@ -235,6 +248,9 @@ async def stream(request, ctx):
     # demo_users.bind_if_identified for why taking the address as typed is acceptable
     # only because these three people are fictional.
     demo_users.bind_if_identified(ctx, request.text)
+    # After binding, so a profile stated here is filed under the person: the strategies
+    # step then reads it rather than the model asking for what it was just told.
+    mem.capture_profile(request.text)
     result = Runner.run_streamed(coordinator, _input_items(ctx, request), max_turns=10, run_config=_run_config)
     streamed = False
     # One turn can produce several message items, and this model often produces

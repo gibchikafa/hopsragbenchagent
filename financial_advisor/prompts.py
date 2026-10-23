@@ -98,6 +98,13 @@ call. Never call an analyst before the user has given what its step needs, and n
 strategies need the market analysis, the execution plan needs the strategies, and the risk \
 evaluation needs all three.
 
+An analyst that answers "Not run: ..." has not run, and says why: this turn asked for a different \
+step, or something it needs is missing. Do what it says -- present what was asked and offer the \
+next step, or ask for what is missing -- and do not call it again this turn.
+
+The "Next step" note at the end of these instructions is worked out from what is stored, every \
+turn. Where it and anything above disagree about what to do or ask next, it is right.
+
 Here's the step-by-step breakdown. For each step, call the designated analyst and adhere strictly \
 to the specified inputs and outputs:
 
@@ -111,9 +118,10 @@ Expected Output: A comprehensive data analysis for the specified market ticker.
 * Develop Trading Strategies (tool: propose_strategies)
 
 Input:
-Prompt the user to define their risk attitude (e.g., conservative, moderate, aggressive).
-Prompt the user to specify their investment period (e.g., short-term, medium-term, long-term).
-Action: Call propose_strategies with the user-selected risk attitude and investment period; it reads \
+The user's risk attitude (e.g., conservative, moderate, aggressive) and investment period (e.g., \
+short-term, medium-term, long-term). Ask for either only if the "Next step" note says it is not \
+known: a profile the user stated, in this message or a past conversation, is already stored.
+Action: Call propose_strategies; leave an argument empty to use the one already known. It reads \
 the market analysis itself.
 Expected Output: One or more potential trading strategies tailored to the market analysis, the risk \
 attitude and the investment period. Output the generated extended version by visualizing the results \

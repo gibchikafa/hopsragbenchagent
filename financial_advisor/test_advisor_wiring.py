@@ -553,3 +553,122 @@ def test_a_reply_written_across_two_model_calls_is_two_paragraphs(openai_stubbed
         "Thanks, that's what you've provided.\n\n"
         "The market analyst has completed the report."
     )
+
+
+# ── what a turn may do, decided in code ─────────────────────────────────────
+
+
+class _Memory:
+    """advisor_memory's context: one conversation's memory, and this turn's message."""
+
+    def __init__(self, text="", **reports):
+        self.store = dict(reports)
+        self.request = types.SimpleNamespace(text=text)
+
+    def recall(self, key, scope=None):
+        return self.store.get(key, "")
+
+    def remember(self, key, value, scope=None):
+        self.store[key] = value
+
+
+def _with(ctx):
+    import advisor_memory as mem  # noqa: PLC0415
+
+    class Holder:
+        @staticmethod
+        def get(_default=None):
+            return ctx
+
+    original = mem.current_context
+    mem.current_context = Holder
+    return mem, lambda: setattr(mem, "current_context", original)
+
+
+def test_a_profile_stated_with_the_request_is_captured_before_the_model_runs():
+    # "I'm a conservative, long-term investor. Propose trading strategies for MSFT"
+    # ran the analysis and then asked for the attitude and the horizon it was given
+    ctx = _Memory()
+    mem, restore = _with(ctx)
+    try:
+        found = mem.capture_profile(
+            "I'm a conservative, long-term investor. Propose trading strategies for MSFT."
+        )
+    finally:
+        restore()
+    assert found == {"risk attitude": "conservative", "investment period": "long-term"}
+    assert ctx.store[mem.RISK_ATTITUDE] == "conservative"
+    assert ctx.store[mem.INVESTMENT_PERIOD] == "long-term"
+
+
+def test_a_message_that_states_no_profile_writes_none():
+    ctx = _Memory()
+    mem, restore = _with(ctx)
+    try:
+        assert mem.capture_profile("Analyze MSFT for me.") == {}
+        # "high-risk" is the profile, not a request for the risk evaluation
+        assert mem.capture_profile("I'm a high-risk investor") == {"risk attitude": "aggressive"}
+    finally:
+        restore()
+
+
+def test_asked_for_the_plan_the_risk_evaluation_does_not_run():
+    # "Plan the second strategy" ran assess_risk instead of plan_execution
+    import advisor_memory as mem  # noqa: PLC0415
+
+    reports = {mem.MARKET_ANALYSIS: "r", mem.STRATEGIES: "s"}
+    mem_, restore = _with(_Memory("Plan the second strategy.", **reports))
+    try:
+        assert mem_.not_this_turn("plan") == ""
+        refusal = mem_.not_this_turn("risk")
+    finally:
+        restore()
+    assert refusal.startswith("Not run")
+    assert "the execution plan" in refusal and "the risk evaluation" in refusal
+
+
+def test_asked_for_strategies_the_analysis_before_them_may_run():
+    mem, restore = _with(_Memory("Propose trading strategies for MSFT."))
+    try:
+        assert mem.not_this_turn("analysis") == ""
+        assert mem.not_this_turn("strategies") == ""
+        assert mem.not_this_turn("plan").startswith("Not run")
+    finally:
+        restore()
+
+
+def test_a_go_ahead_runs_the_next_step_and_only_that():
+    import advisor_memory as mem  # noqa: PLC0415
+
+    reports = {mem.MARKET_ANALYSIS: "r", mem.STRATEGIES: "s"}
+    mem_, restore = _with(_Memory("Yes please.", **reports))
+    try:
+        assert mem_.not_this_turn("plan") == ""
+        assert mem_.not_this_turn("risk").startswith("Not run")
+    finally:
+        restore()
+
+
+def test_with_no_report_yet_the_next_step_is_the_ticker():
+    # The recipe asks for the ticker first. After the introduction the agent asked
+    # for the risk profile instead, which the strategies need, two steps later.
+    mem, restore = _with(_Memory())
+    try:
+        line = mem.next_step_block()
+    finally:
+        restore()
+    assert "ask for the ticker" in line
+    assert "Do not ask for a risk attitude" in line
+
+
+def test_a_known_profile_is_not_asked_for_again():
+    import advisor_memory as mem  # noqa: PLC0415
+
+    ctx = _Memory(**{mem.MARKET_ANALYSIS: "r", mem.RISK_ATTITUDE: "moderate",
+                     mem.INVESTMENT_PERIOD: "long-term"})
+    mem_, restore = _with(ctx)
+    try:
+        line = mem_.next_step_block()
+    finally:
+        restore()
+    assert "moderate, long-term" in line and "do not ask for it" in line

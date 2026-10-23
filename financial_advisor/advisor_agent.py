@@ -71,6 +71,7 @@ from advisor_memory import (
     STRATEGIES,
     TICKER,
 )
+import advisor_memory as mem
 from advisor_memory import missing as _missing
 from advisor_memory import progress_block as _progress_block
 from advisor_memory import read as _read
@@ -141,19 +142,27 @@ async def analyze_market(ticker: str) -> str:
 
 
 @tool
-async def propose_strategies(risk_attitude: str, investment_period: str) -> str:
+async def propose_strategies(risk_attitude: str = "", investment_period: str = "") -> str:
     """The trading analyst: five or more strategies for the analyzed ticker and this profile.
 
     Reads the market analysis itself; call analyze_market first.
 
     Args:
-        risk_attitude: The user's attitude to risk, e.g. conservative, moderate, aggressive.
-        investment_period: The user's timeframe, e.g. short-term, medium-term, long-term.
+        risk_attitude: The user's attitude to risk, e.g. conservative, moderate, aggressive; empty to use the one already known.
+        investment_period: The user's timeframe, e.g. short-term, medium-term, long-term; empty to use the one already known.
     """
+    if problem := mem.not_this_turn("strategies"):
+        return problem
     if problem := _missing(("market analysis (market_data_analysis_output)", MARKET_ANALYSIS)):
         return problem
-    _write(RISK_ATTITUDE, risk_attitude.strip())
-    _write(INVESTMENT_PERIOD, investment_period.strip())
+    # a profile stated this turn was captured before the model ran; one from before is in memory
+    risk_attitude = risk_attitude.strip() or _read(RISK_ATTITUDE)
+    investment_period = investment_period.strip() or _read(INVESTMENT_PERIOD)
+    if not (risk_attitude and investment_period):
+        return ("Not run: the risk attitude and the investment period are both needed. "
+                "Ask the user for whichever is missing.")
+    _write(RISK_ATTITUDE, risk_attitude)
+    _write(INVESTMENT_PERIOD, investment_period)
     report = await _analyst(
         TRADING_ANALYST_PROMPT,
         f"user_risk_attitude: {risk_attitude}\n"
@@ -177,6 +186,8 @@ async def plan_execution(selected_strategy: str = "", execution_preferences: str
         execution_preferences: The user's execution preferences, such as broker or order
             types; empty when they stated none.
     """
+    if problem := mem.not_this_turn("plan"):
+        return problem
     if problem := _missing(
         ("trading strategies (proposed_trading_strategies_output)", STRATEGIES)
     ):
@@ -202,6 +213,8 @@ async def assess_risk() -> str:
     Takes no input; reads the three earlier reports and the profile itself. Call it
     last, after plan_execution.
     """
+    if problem := mem.not_this_turn("risk"):
+        return problem
     if problem := _missing(
         ("market analysis (market_data_analysis_output)", MARKET_ANALYSIS),
         ("trading strategies (proposed_trading_strategies_output)", STRATEGIES),
@@ -311,6 +324,8 @@ async def stream(request, ctx):
     # keys memory, so making long-term memory follow the person is the application's
     # job. See demo_users.bind_if_identified.
     demo_users.bind_if_identified(ctx, request.text)
+    # after binding, so a profile stated here is filed under the person
+    mem.capture_profile(request.text)
 
     # The prompt, the rolling summary of folded turns, and where the process
     # stands: which reports exist, so a resumed conversation continues rather
