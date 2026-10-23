@@ -46,7 +46,7 @@ from store import (
     triage_query,
 )
 
-MODEL_NAME = os.environ.get("GUARDIAN_OPENAI_MODEL", "")
+MODEL_NAME = os.environ.get("GUARDIAN_OPENAI_MODEL", "gpt-6-luna")
 PENDING_KEY = "pending_actions"
 
 
@@ -244,7 +244,7 @@ agent_app = AgentApp(
     "I'll triage it, check the indicators, investigate the logs and propose the playbook.",
     suggested_prompts=["What can you do?"],
     placeholder="Paste the raw alert text...",
-    memory=ManagedMemoryService(summarize=openai_summarizer(), long_term=True),
+    memory=ManagedMemoryService(summarize=openai_summarizer("gpt-6-luna"), long_term=True),
     tool_events=True,
 )
 

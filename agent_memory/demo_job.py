@@ -158,8 +158,8 @@ def deploy(agents: Any, args: argparse.Namespace) -> Any:
         environment=args.environment,
         description="Agent memory demo, deployed by demo_job.py",
         # Priced, or every traced turn costs 0.0 -- free and unpriced read the
-        # same. List prices per million tokens for MEMORY_DEMO_MODEL; change them
-        # when you change the model.
+        # same. The model is gpt-6-luna unless MEMORY_DEMO_MODEL names another.
+        # PLACEHOLDER prices, not gpt-6-luna's: set them from OpenAI's list.
         tracing={"enabled": True,
                  "input_token_price_per_million_tokens": 2.0,
                  "output_token_price_per_million_tokens": 8.0},

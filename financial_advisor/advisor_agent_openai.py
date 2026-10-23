@@ -11,8 +11,9 @@ so the two entry points are interchangeable on the same deployment history.
 Deploy (git-backed, so `prompts.py` and `advisor_memory.py` come along):
     agents.deploy_agent("financial_advisor/advisor_agent_openai.py", name="financialadvisor-openai",
                         # Priced, or every traced turn costs 0.0, which reads as free
-                        # rather than as unpriced. ADVISOR_OPENAI_MODEL picks the model,
-                        # so set the pair that goes with it.
+                        # rather than as unpriced. The model is gpt-6-luna unless
+                        # ADVISOR_OPENAI_MODEL names another. PLACEHOLDER prices, not
+                        # gpt-6-luna's: set them from OpenAI's price list.
                         tracing={"enabled": True,
                                  "input_token_price_per_million_tokens": 2.0,
                                  "output_token_price_per_million_tokens": 8.0}, ...)
@@ -45,7 +46,7 @@ from prompts import (
     TRADING_ANALYST_PROMPT,
 )
 
-MODEL_NAME = os.environ.get("ADVISOR_OPENAI_MODEL", "")
+MODEL_NAME = os.environ.get("ADVISOR_OPENAI_MODEL", "gpt-6-luna")
 
 
 def _model_kwargs() -> dict[str, Any]:
@@ -204,7 +205,7 @@ agent_app = AgentApp(
     ],
     placeholder="A ticker to analyze, or the next step...",
     memory=ManagedMemoryService(
-        summarize=openai_summarizer(),
+        summarize=openai_summarizer("gpt-6-luna"),
         long_term=True,
         max_state_value_chars=mem.MAX_REPORT_CHARS,
     ),

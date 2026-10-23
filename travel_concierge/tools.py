@@ -49,7 +49,7 @@ from types_ import (
 #: OpenAI by default (the SDK's own default model); "anthropic/claude-sonnet-4-5" and the like go
 #: through LiteLLM. The agent image ships openai-agents without that extra,
 #: so a provider-prefixed model needs `litellm` added to the environment.
-MODEL_NAME = os.environ.get("CONCIERGE_MODEL", "")
+MODEL_NAME = os.environ.get("CONCIERGE_MODEL", "gpt-6-luna")
 
 
 def model() -> Any:

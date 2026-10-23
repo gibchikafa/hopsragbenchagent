@@ -43,7 +43,7 @@ explained by the coordinator, rather than twice.
 ## Two entry points
 
 `advisor_agent.py` runs on LangGraph with Claude and its web search; `advisor_agent_openai.py`
-on the OpenAI Agents SDK with OpenAI's models and the SDK's `WebSearchTool` (`OPENAI_API_KEY`),
+on the OpenAI Agents SDK with `gpt-6-luna` and the SDK's `WebSearchTool` (`OPENAI_API_KEY`),
 or any LiteLLM model name in `ADVISOR_OPENAI_MODEL`. Both keep the reports in the same
 working-memory keys, so either can continue a plan the other started.
 

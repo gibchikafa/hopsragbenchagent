@@ -119,9 +119,10 @@ agents = hopsworks.login().get_agent_serving()
 agents.deploy_agent("agent_memory/memory_agent.py", name="memorydemo",
                     git_url="https://github.com/<you>/hopsragbenchagent.git", git_provider="GitHub",
                     git_branch="main",
-                    environment="python-agent-pipeline", # Priced, or every traced turn costs 0.0 -- free and unpriced read the
-                    # same. List prices per million tokens for MEMORY_DEMO_MODEL; change them
-                    # when you change the model.
+                    environment="python-agent-pipeline",
+                    # Priced, or every traced turn costs 0.0 -- free and unpriced read the
+                    # same. The model is gpt-6-luna unless MEMORY_DEMO_MODEL names another.
+                    # PLACEHOLDER prices, not gpt-6-luna's: set them from OpenAI's list.
                     tracing={"enabled": True,
                              "input_token_price_per_million_tokens": 2.0,
                              "output_token_price_per_million_tokens": 8.0}).start()
@@ -140,7 +141,7 @@ demo.chat("What do you remember about me?")   # new conversation, same person
 | Variable | Description |
 |---|---|
 | `OPENAI_API_KEY` | The agent and the memory summariser (`openai_summarizer`). One key covers the deployment. |
-| `MEMORY_DEMO_MODEL` | Model name. Empty uses the SDK's default; a name with a slash, such as `anthropic/claude-sonnet-4-5`, goes through LiteLLM and needs that provider's key. |
+| `MEMORY_DEMO_MODEL` | Model name; `gpt-6-luna` when unset. A name with a slash, such as `anthropic/claude-sonnet-4-5`, goes through LiteLLM and needs that provider's key. |
 | `MEMORY_DEMO_FOLD_AFTER` | Messages before older turns fold into the summary. Default 6, so folding happens inside a demo chat; the SDK's own default is 20. |
 | `MEMORY_DEMO_KEEP_RECENT` | Messages kept in working memory after a fold. Default 4. |
 | `MEMORY_DEMO_VECTOR_SEARCH` | `true` adds an embedder and an embedding feature group, which makes `search` semantic instead of keyword. Off by default: the other tiers need neither. |

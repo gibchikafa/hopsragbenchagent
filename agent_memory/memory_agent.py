@@ -27,8 +27,8 @@ Deploy it as a single file; it needs no feature store and no data:
     agent = agents.deploy_agent(
         "agent_memory/memory_agent.py", name="memorydemo",
         # Priced, or every traced turn costs 0.0, which reads as free rather than
-        # as unpriced. MEMORY_DEMO_MODEL picks the model; set the pair that goes
-        # with it.
+        # as unpriced. The model is gpt-6-luna unless MEMORY_DEMO_MODEL names
+        # another. PLACEHOLDER prices, not gpt-6-luna's: set them from OpenAI's list.
         tracing={"enabled": True,
                  "input_token_price_per_million_tokens": 2.0,
                  "output_token_price_per_million_tokens": 8.0})
@@ -56,7 +56,7 @@ from openai.types.responses import ResponseTextDeltaEvent
 
 from prompts import SYSTEM_PROMPT, WELCOME
 
-MODEL_NAME = os.environ.get("MEMORY_DEMO_MODEL", "")
+MODEL_NAME = os.environ.get("MEMORY_DEMO_MODEL", "gpt-6-luna")
 
 #: Fold early and keep little, so short-term memory is reachable in a demo. A
 #: real agent leaves these alone: the defaults (20 and 10) fold about once an
@@ -177,7 +177,7 @@ agent_app = AgentApp(
     ],
     placeholder="Tell me something about yourself, or ask what I remember...",
     memory=ManagedMemoryService(
-        summarize=openai_summarizer(),
+        summarize=openai_summarizer("gpt-6-luna"),
         summarize_after_messages=FOLD_AFTER_MESSAGES,
         keep_recent_messages=KEEP_RECENT_MESSAGES,
         long_term=True,

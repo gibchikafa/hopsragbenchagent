@@ -35,7 +35,7 @@ from store import TOOLS as STORE_TOOLS
 #: OpenAI by default (the SDK's own default model); "anthropic/claude-sonnet-4-5" and the like go
 #: through LiteLLM. The agent image ships openai-agents without that extra,
 #: so a provider-prefixed model needs `litellm` added to the environment.
-MODEL_NAME = os.environ.get("WEBSHOP_OPENAI_MODEL", "")
+MODEL_NAME = os.environ.get("WEBSHOP_OPENAI_MODEL", "gpt-6-luna")
 
 
 def _model_kwargs() -> dict[str, Any]:
@@ -83,7 +83,7 @@ agent_app = AgentApp(
     ],
     placeholder="What are you looking for? You can also send a photo...",
     input_modalities=["text", "image"],
-    memory=ManagedMemoryService(summarize=openai_summarizer(), long_term=True),
+    memory=ManagedMemoryService(summarize=openai_summarizer("gpt-6-luna"), long_term=True),
     # The agent object itself: the SDK reads the handoffs, tools and servers
     # hanging off it, the way it reads a compiled LangGraph's get_graph(), so
     # the chat panel's Graph tab shows this agent and the tools it reaches.

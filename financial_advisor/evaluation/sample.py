@@ -48,7 +48,7 @@ RUBRIC = Path(__file__).with_name("rubric.md")
 #: one judge whose agreement means nothing, and a judge is a cheaper call than an
 #: analyst anyway. Override for a cluster whose key is somebody else's.
 JUDGE_PROVIDER = os.environ.get("ADVISOR_JUDGE_PROVIDER", "openai")
-JUDGE_MODEL = os.environ.get("ADVISOR_JUDGE_MODEL", "gpt-5.6-terra")
+JUDGE_MODEL = os.environ.get("ADVISOR_JUDGE_MODEL", "gpt-6-sol")
 JUDGE_NAME = "Financial advisor reply quality"
 
 

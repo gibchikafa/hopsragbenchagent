@@ -139,8 +139,8 @@ hops agent start chinooksupport --wait 600
 | `CHINOOK_DB_PATH` | `chinook.db` | Source SQLite file — **migration scripts only**; the agent never reads it |
 | `CHINOOK_ROUTER_MODEL` | `claude-haiku-4-5` | Intent routing + purchase-info extraction |
 | `CHINOOK_ANSWER_MODEL` | `claude-haiku-4-5` | Catalogue question answering |
-| `CHINOOK_OPENAI_ROUTER_MODEL` | OpenAI Agents SDK default | OpenAI identity extraction |
-| `CHINOOK_OPENAI_ANSWER_MODEL` | OpenAI Agents SDK default | OpenAI catalogue/refund answering |
+| `CHINOOK_OPENAI_ROUTER_MODEL` | `gpt-6-luna` | OpenAI identity extraction |
+| `CHINOOK_OPENAI_ANSWER_MODEL` | `gpt-6-luna` | OpenAI catalogue/refund answering |
 | `CHINOOK_CLAUDE_ROUTER_MODEL` | `CHINOOK_ANSWER_MODEL` | Claude Agent SDK identity extraction |
 | `CHINOOK_CLAUDE_ANSWER_MODEL` | `CHINOOK_ANSWER_MODEL` | Claude Agent SDK catalogue/refund answering |
 

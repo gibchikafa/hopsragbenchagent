@@ -27,9 +27,9 @@ Deploy (git-backed, so the modules and profiles come along):
                         git_url="https://github.com/<you>/hopsragbenchagent.git",
                         git_provider="GitHub", git_branch="main",
                         # Priced, or every traced turn costs 0.0 -- which reads as free
-                        # rather than as unpriced. List prices per million tokens for
-                        # the model CONCIERGE_MODEL names when this was written; check your provider's, and
-                        # change them when you change the model.
+                        # rather than as unpriced. The model is gpt-6-luna unless
+                        # CONCIERGE_MODEL names another. PLACEHOLDER prices, not
+                        # gpt-6-luna's: set them from OpenAI's price list.
                         tracing={"enabled": True,
                                  "input_token_price_per_million_tokens": 3.0,
                                  "output_token_price_per_million_tokens": 15.0}).start()
@@ -173,7 +173,7 @@ agent_app = AgentApp(
     placeholder="Where would you like to go?",
     input_modalities=["text", "image"],
     memory=ManagedMemoryService(
-        summarize=openai_summarizer(),
+        summarize=openai_summarizer("gpt-6-luna"),
         long_term=True,
         max_state_value_chars=MAX_STATE_CHARS,
     ),

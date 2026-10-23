@@ -20,7 +20,7 @@
         "type": "llm_judge",
         "name": "asked_who_it_is_speaking_to",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -72,7 +72,7 @@
         "type": "llm_judge",
         "name": "no_payment_was_claimed",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -128,7 +128,7 @@
         "type": "llm_judge",
         "name": "asked_rather_than_assumed",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -206,7 +206,7 @@
         "type": "llm_judge",
         "name": "the_conversation_got_there",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "inputs": [
           "user_request",

@@ -54,7 +54,7 @@ data has no review text, only a rating and a count, so "Reviews" is the rating.
 
 `shopping_agent.py` runs the agent on LangGraph, `shopping_agent_openai.py` on the OpenAI Agents
 SDK. They share the store, the prompt and the feature groups; only the runtime differs. The
-OpenAI entry point runs on OpenAI's models by default (`OPENAI_API_KEY`), or on any LiteLLM
+OpenAI entry point runs on `gpt-6-luna` by default (`OPENAI_API_KEY`), or on any LiteLLM
 model name in `WEBSHOP_OPENAI_MODEL`, e.g. `anthropic/claude-sonnet-4-5`.
 
 ## Who it is shopping for

@@ -129,7 +129,7 @@ _KEY_RE = re.compile(r"^[0-9a-f]{24}$")
 
 
 def _model_kwargs(env_name: str) -> dict:
-    model = os.environ.get(env_name)
+    model = os.environ.get(env_name, "gpt-6-luna")
     return {"model": model} if model else {}
 
 
@@ -243,7 +243,7 @@ agent_app = AgentApp(
     ],
     placeholder="Ask about the catalogue, or request a refund...",
     memory=ManagedMemoryService(
-        summarize=openai_summarizer(),
+        summarize=openai_summarizer("gpt-6-luna"),
         long_term=True,
     ),
     tool_events=True,

@@ -63,8 +63,8 @@ last 24 hours) happens in Python on that row.
 model is asked three things. `guardian_agent_openai.py` keeps the recipe's own shape: an
 orchestrator told the plan in its prompt, with the four analysts attached as tools, each
 wrapping one store lookup; held actions wait in working memory for `approve_pending`. Same
-store, same feature groups, same evaluation suites. The OpenAI entry point runs on OpenAI's
-models (`OPENAI_API_KEY`) or any LiteLLM model name in `GUARDIAN_OPENAI_MODEL`.
+store, same feature groups, same evaluation suites. The OpenAI entry point runs on
+`gpt-6-luna` (`OPENAI_API_KEY`) or any LiteLLM model name in `GUARDIAN_OPENAI_MODEL`.
 
 ## Who is on shift
 

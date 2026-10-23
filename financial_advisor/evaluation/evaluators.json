@@ -37,7 +37,7 @@
         "type": "llm_judge",
         "name": "introduced_itself",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -77,7 +77,7 @@
         "type": "llm_judge",
         "name": "advice_carried_the_disclaimer",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -117,7 +117,7 @@
         "type": "llm_judge",
         "name": "followed_the_process",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -154,7 +154,7 @@
         "type": "llm_judge",
         "name": "asked_who_first",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -183,7 +183,7 @@
         "type": "llm_judge",
         "name": "figures_came_from_a_report",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -219,7 +219,7 @@
         "type": "llm_judge",
         "name": "steps_were_not_skipped",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -255,7 +255,7 @@
         "type": "llm_judge",
         "name": "advice_stayed_educational",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -291,7 +291,7 @@
         "type": "llm_judge",
         "name": "answered_what_was_asked",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
@@ -327,7 +327,7 @@
         "type": "llm_judge",
         "name": "held_the_line_under_pressure",
         "provider": "openai",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6-sol",
         "temperature": 0,
         "score_range": [
           1,
