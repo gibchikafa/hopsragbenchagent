@@ -244,6 +244,12 @@ def test_the_question_is_skipped_when_the_client_already_knows(stubbed):
     note = demo_users.already_identified(bound)
     assert "dana@example.com" in note
     assert "do not call `identify`" in note
+    # and every turn after that one, which the SDK reports as "conversation": the
+    # binding read back from an earlier turn. Missed, the agent re-identified on turn 3.
+    later = types.SimpleNamespace(
+        has_subject=True, subject="dana@example.com", subject_source="conversation"
+    )
+    assert "do not call `identify`" in demo_users.already_identified(later)
 
 
 def test_an_address_binds_memory_to_the_person(stubbed):
@@ -481,3 +487,69 @@ def test_a_multi_turn_task_checks_the_last_turns_tools():
         if len(turns) > 2:
             assert len(required) == 1, task["input"]
             assert "whole conversation" in task["rubric"], task["input"]
+
+
+def test_a_reply_written_across_two_model_calls_is_two_paragraphs(openai_stubbed):
+    """output_index restarts at 0 for every model call.
+
+    The sentence the coordinator writes before calling an analyst and the answer it
+    writes after were both "item 0", so they streamed as one: "...which you've
+    provided.The market analyst has completed...". A second item of the same call is
+    still held back, and dropped when it only repeats what was said.
+    """
+
+    class Raw:
+        def __init__(self, data):
+            self.data = data
+
+    class Delta:
+        def __init__(self, delta, output_index=0):
+            self.delta = delta
+            self.output_index = output_index
+            self.type = "response.output_text.delta"
+
+    class ItemEvent:
+        pass
+
+    sys.modules["agents.stream_events"].RawResponsesStreamEvent = Raw
+    sys.modules["agents.stream_events"].RunItemStreamEvent = ItemEvent
+    sys.modules["openai.types.responses"].ResponseTextDeltaEvent = Delta
+    sys.modules["hopsworks_agents.protocol"].AgentApp = lambda **kw: types.SimpleNamespace(
+        stream=lambda fn: fn, chat=lambda fn: fn
+    )
+    for name in ("advisor_memory", "advisor_agent_openai"):
+        sys.modules.pop(name, None)
+    import advisor_agent_openai as o  # noqa: PLC0415
+
+    created = types.SimpleNamespace(type="response.created")
+    events = [
+        Raw(created), Raw(Delta("Thanks, that's what ")), Raw(Delta("you've provided.")),
+        Raw(Delta("Thanks, that's what you've provided.", output_index=1)),  # a restatement
+        Raw(created), Raw(Delta("The market analyst has completed the report.")),
+    ]
+
+    class Result:
+        final_output = ""
+
+        async def stream_events(self):
+            for event in events:
+                yield event
+
+    o.Runner = types.SimpleNamespace(run_streamed=lambda *a, **kw: Result())
+    ctx = types.SimpleNamespace(
+        has_subject=False, subject_source="conversation", subject="conv-1",
+        history=[], system_context=lambda: "", rebind_subject=lambda s: None,
+    )
+    request = types.SimpleNamespace(text="Analyze MSFT for me.")
+
+    import asyncio  # noqa: PLC0415
+
+    async def collect():
+        return "".join([d async for d in o.stream(request, ctx)])
+
+    reply = asyncio.run(collect())
+
+    assert reply == (
+        "Thanks, that's what you've provided.\n\n"
+        "The market analyst has completed the report."
+    )

@@ -99,9 +99,13 @@ def already_identified(ctx) -> str:
     turn, because a rule it read once ("do not call `identify` again") lost to the
     standing instruction to ask, and the agent re-identified people on their third turn.
     """
+    # Any real identity, which is what has_subject means: "client" (asserted on the
+    # request), "app" (bound this turn) or "conversation" (bound on an earlier turn
+    # and read back by the SDK). Checking for the first two only missed the third --
+    # every turn after the one where the address was given -- so the note was never
+    # sent then, and the model, told to ask first, called `identify` again on turn
+    # three. The per-conversation fallback is the one case with has_subject False.
     if not getattr(ctx, "has_subject", False):
-        return ""
-    if getattr(ctx, "subject_source", "") not in ("client", "app"):
         return ""
     return (
         f"\n\nThis conversation is already identified as {ctx.subject}, and memory is "

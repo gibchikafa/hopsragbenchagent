@@ -123,7 +123,6 @@ These judge a trace on its own and can be sampled against the deployment:
 | `Answered what was asked` | The advisor answering the step it wanted rather than the question in front of it. |
 | `Asked who it is talking to` | Work started for someone unidentified, whose memory is lost with the conversation. |
 | `Advice carried the disclaimer` | Advice shown without it. |
-| `Introduced itself and showed the disclaimer` | A first reply that skips either. |
 | `No tool errored` | An analyst that returned an error rather than a report. |
 
 ```python
@@ -137,6 +136,14 @@ agent.sample(evaluator=judge, sample=50).wait()   # traffic since the last sampl
 `Only the analysts the step needs`, `Analysts ran in the recipe's order` and `Followed the
 process` are the other kind: they read a task's expected tools or rubric, so they belong to
 a suite and have nothing to compare against on live traffic.
+
+`Introduced itself and showed the disclaimer` belongs in a suite too, for a different
+reason: it is about the *first* reply, and a sample grades a conversation's last turn, so
+pointed at live traffic it fails every conversation that got past the greeting. The
+"Introduces itself before advising" suite is where it runs. A monitor's criteria have to
+hold for any single exchange read on its own, and say that a turn where the thing did not
+come up passes -- which is how `Asked who it is talking to` and `Advice carried the
+disclaimer` are written.
 
 ## Environment variables
 
