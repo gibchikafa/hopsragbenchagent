@@ -45,6 +45,7 @@ Deploy:
 from __future__ import annotations
 
 import os
+import types
 from typing import Any
 
 from hopsworks_agents.protocol import (
@@ -345,6 +346,18 @@ async def stream(request, ctx):
             ):
                 continue
             yield event
+            if event.get("event") == "on_tool_end":
+                # ...and the finished report is shown once, under its analyst's name,
+                # rather than left to the coordinator to present: see
+                # advisor_memory.presented.
+                output = (event.get("data") or {}).get("output")
+                report = mem.presented(event.get("name", ""), getattr(output, "content", output))
+                if report:
+                    yield {
+                        "event": "on_chat_model_stream",
+                        "data": {"chunk": types.SimpleNamespace(content="\n\n" + report + "\n\n")},
+                        "tags": [],
+                    }
 
     async for delta in ctx.stream_langchain(
         _coordinator_only(coordinator.astream_events({"messages": messages}, version="v2"))

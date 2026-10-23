@@ -414,7 +414,10 @@ def test_the_disclaimer_rides_with_every_piece_of_advice():
     import prompts  # noqa: PLC0415
 
     coordinator = prompts.COORDINATOR_PROMPT
-    assert "with every piece of advice" in coordinator
+    assert "every piece of advice reaches the user with that disclaimer" in coordinator.lower()
+    # carried by the reports themselves, which the app now shows in full
+    for name in ("TRADING_ANALYST_PROMPT", "EXECUTION_ANALYST_PROMPT", "RISK_ANALYST_PROMPT"):
+        assert prompts.DISCLAIMER in getattr(prompts, name), name
     assert "do not call `identify` again" in coordinator.lower()
     assert "do not ask them to confirm a step they have just asked for" in (
         coordinator.lower()
@@ -672,3 +675,82 @@ def test_a_known_profile_is_not_asked_for_again():
     finally:
         restore()
     assert "moderate, long-term" in line and "do not ask for it" in line
+
+
+def test_a_report_is_shown_under_its_analysts_name_and_a_refusal_is_not():
+    # The coordinator was asked to present each report and often did not: "the market
+    # analyst has completed the analysis" with none of it on screen, or "I'm calling
+    # the risk analyst now" and no call. A report that exists is now shown by the app.
+    import advisor_memory as mem  # noqa: PLC0415
+
+    shown = mem.presented("analyze_market", "MSFT trades at ...")
+    assert shown.startswith("### Market analysis") and "MSFT trades at" in shown
+    assert mem.presented("assess_risk", "Not run: this turn asked for the plan") == ""
+    assert mem.presented("assess_risk", "Error: the foundational input(s) ...") == ""
+    assert mem.presented("recall", "moderate") == ""
+
+
+def test_the_stream_shows_the_analysts_report_between_the_two_calls(openai_stubbed):
+    class Raw:
+        def __init__(self, data):
+            self.data = data
+
+    class Delta:
+        def __init__(self, delta, output_index=0):
+            self.delta = delta
+            self.output_index = output_index
+            self.type = "response.output_text.delta"
+
+    class ItemEvent:
+        def __init__(self, name, raw_item, output=None):
+            self.name = name
+            self.item = types.SimpleNamespace(raw_item=raw_item, output=output)
+
+    sys.modules["agents.stream_events"].RawResponsesStreamEvent = Raw
+    sys.modules["agents.stream_events"].RunItemStreamEvent = ItemEvent
+    sys.modules["openai.types.responses"].ResponseTextDeltaEvent = Delta
+    sys.modules["hopsworks_agents.protocol"].AgentApp = lambda **kw: types.SimpleNamespace(
+        stream=lambda fn: fn, chat=lambda fn: fn
+    )
+    for name in ("advisor_memory", "advisor_agent_openai"):
+        sys.modules.pop(name, None)
+    import advisor_agent_openai as o  # noqa: PLC0415
+
+    created = types.SimpleNamespace(type="response.created")
+    called = types.SimpleNamespace(name="analyze_market", call_id="c1", arguments='{"ticker": "MSFT"}')
+    events = [
+        Raw(created), Raw(Delta("Let's start with the market analysis.")),
+        ItemEvent("tool_called", called),
+        ItemEvent("tool_output", {"call_id": "c1"}, output="MSFT report body."),
+        Raw(created), Raw(Delta("Next: your risk attitude and horizon.")),
+    ]
+
+    class Result:
+        final_output = ""
+
+        async def stream_events(self):
+            for event in events:
+                yield event
+
+    async def emit_event(*_a, **_kw):
+        return None
+
+    o.Runner = types.SimpleNamespace(run_streamed=lambda *a, **kw: Result())
+    ctx = types.SimpleNamespace(
+        has_subject=False, subject_source="conversation", subject="conv-1",
+        history=[], system_context=lambda: "", rebind_subject=lambda s: None,
+        emit_event=emit_event,
+    )
+    request = types.SimpleNamespace(text="Analyze MSFT for me.")
+
+    import asyncio  # noqa: PLC0415
+
+    async def collect():
+        return "".join([d async for d in o.stream(request, ctx)])
+
+    reply = asyncio.run(collect())
+    assert reply == (
+        "Let's start with the market analysis.\n\n"
+        "### Market analysis — from the data analyst\n\nMSFT report body.\n\n"
+        "Next: your risk attitude and horizon."
+    )

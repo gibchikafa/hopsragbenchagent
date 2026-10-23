@@ -272,6 +272,7 @@ async def stream(request, ctx):
     # end only if it says something the reply does not already contain.
     call = 0
     live: dict[int, int] = {}  # model call -> the output_index that streams live
+    called: dict[str, str] = {}  # tool call id -> tool name, to name a report when it returns
     spoken = ""
     held: dict[tuple[int, int], str] = {}
     async for event in result.stream_events():
@@ -294,12 +295,21 @@ async def stream(request, ctx):
         elif isinstance(event, RunItemStreamEvent):
             raw = getattr(event.item, "raw_item", None)
             if event.name == "tool_called":
+                called[str(getattr(raw, "call_id", ""))] = getattr(raw, "name", "")
                 await ctx.emit_event(getattr(raw, "name", "tool"), status="running",
                                      message=str(getattr(raw, "arguments", "") or "")[:200],
                                      event_id=getattr(raw, "call_id", None))
             elif event.name == "tool_output":
-                await ctx.emit_event("tool", status="done",
-                                     event_id=raw.get("call_id") if isinstance(raw, dict) else getattr(raw, "call_id", None))
+                call_id = raw.get("call_id") if isinstance(raw, dict) else getattr(raw, "call_id", None)
+                await ctx.emit_event("tool", status="done", event_id=call_id)
+                # The report itself, on the screen as soon as the analyst returns: see
+                # advisor_memory.presented for why this is not left to the model.
+                report = mem.presented(called.get(str(call_id), ""), getattr(event.item, "output", ""))
+                if report:
+                    block = ("\n\n" if spoken.strip() else "") + report
+                    spoken += block
+                    streamed = True
+                    yield block
     for _key, text in sorted(held.items()):
         # Said once: a held-back item that repeats what was streamed is this model
         # restating itself; one that adds something is a continuation.

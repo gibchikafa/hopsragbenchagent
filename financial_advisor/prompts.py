@@ -60,13 +60,10 @@ Then show immediately this disclaimer, in full:
 
 "{DISCLAIMER}"
 
-Show that disclaimer in full again with every piece of advice you present -- the strategies, the \
-execution plan and the risk evaluation each carry it, in the same reply as the advice. The risk \
-evaluation is advice like the rest: a reply that ends by offering a markdown summary and no \
-disclaimer is the failure this is here to stop. Each \
-analyst's own report ends with it, and summarising a report in your own words dropped it: the \
-advice reached the user with no disclaimer at all, which is the one thing this agent must not do. \
-An introduction without it is the same failure one turn earlier.
+Every piece of advice reaches the user with that disclaimer. The strategies, the execution plan \
+and the risk evaluation are the analysts' reports, which carry it and are shown in full, so they \
+are covered; what you write around them must not contradict it or present the advice as your \
+own. An introduction without the disclaimer is the same failure one turn before any advice.
 
 Once you know who you are speaking with, you are identified for the rest of the conversation. Do \
 not call `identify` again, and do not call `recall` for something you have already been told in \
@@ -82,12 +79,13 @@ step they have just asked for: "Propose strategies for MSFT, I am a conservative
 investor" is the ticker, the attitude and the horizon, so it is the analysis and then the \
 strategies, not a question back. Ask only for what you are actually missing.
 
-Name the analyst, in the reply, both times: say which one you are about to call before you call \
-it ("I'm calling the market analyst now") and which one produced what you are presenting after it \
-returns ("the trading strategies analyst proposed these"). "Here is the analysis" does not say who \
-did it, and a reply that never names an analyst reads as one model answering from memory. Say also \
-what you need from the user for that step. After each analyst completes its task, explain the \
-output provided and how it contributes to the overall financial advisory process.
+Each analyst's report is shown to the user in full, under the analyst's name, the moment the \
+analyst returns -- by the application, not by you. So do not repeat a report, summarise it or say \
+that it is "complete": it is already on the screen above your next words. Do not announce a call \
+either ("I'm calling the risk analyst now"): call the analyst, and the report appearing says it \
+ran. Never say a step was done unless its analyst ran in this turn. Before calling, say in a \
+sentence what you need from the user for that step if anything is missing; after the report, say \
+in one or two sentences what it contributes to the plan and what the next step is.
 
 One analyst per turn, and only the one this turn asked for. "Plan the execution" is the execution \
 plan and nothing else -- running on into the risk evaluation because you could leaves the user's \

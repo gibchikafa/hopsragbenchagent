@@ -279,3 +279,31 @@ def next_step_block() -> str:
     if step == "risk":
         return "\n\nNext step: the risk evaluation of the whole plan."
     return ""
+
+
+# ── presenting the analysts' reports ───────────────────────────────────────
+
+#: Each analyst, as the user sees it named above its report.
+ANALYST_TITLES = {
+    "analyze_market": "Market analysis — from the data analyst",
+    "propose_strategies": "Trading strategies — from the trading analyst",
+    "plan_execution": "Execution plan — from the execution analyst",
+    "assess_risk": "Risk evaluation — from the risk analyst",
+}
+
+
+def presented(tool_name: str, output: object) -> str:
+    """An analyst's report as the user is shown it, or "" when there is none to show.
+
+    Shown by the handler, not left to the coordinator. Asked to present each report,
+    the model often did not: it wrote "the market analyst has completed the analysis"
+    and showed none of it, or "I'm calling the risk analyst now" and never called it --
+    the narration came out in place of the work. A report that exists is now on the
+    screen under its analyst's name the moment the analyst returns, whatever the model
+    says around it; a refusal ("Not run ...") or an error is the model's to explain.
+    """
+    title = ANALYST_TITLES.get(tool_name)
+    text = str(output or "").strip()
+    if not title or not text or text.startswith(("Not run", "Error")):
+        return ""
+    return f"### {title}\n\n{text}"
