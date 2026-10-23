@@ -8,7 +8,14 @@ serving surface, as in `shopping_agent.py`. A shopper's photo reaches the
 model as an image input.
 
 Deploy (git-backed, so `store.py` and `prompts.py` come along):
-    agents.deploy_agent("personalized_shopping/shopping_agent_openai.py", name="webshop-openai", ...)
+    agents.deploy_agent("personalized_shopping/shopping_agent_openai.py", name="webshop-openai",
+                        # Priced, or every traced turn costs 0.0, which reads as free
+                        # rather than as unpriced. The model is gpt-6-luna unless
+                        # WEBSHOP_OPENAI_MODEL names another. Its list prices,
+                        # $0.10 / $0.50 per million tokens as of October 2026.
+                        tracing={"enabled": True,
+                                 "input_token_price_per_million_tokens": 0.10,
+                                 "output_token_price_per_million_tokens": 0.50}, ...)
 """
 
 from __future__ import annotations

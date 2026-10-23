@@ -28,10 +28,10 @@ Deploy it as a single file; it needs no feature store and no data:
         "agent_memory/memory_agent.py", name="memorydemo",
         # Priced, or every traced turn costs 0.0, which reads as free rather than
         # as unpriced. The model is gpt-6-luna unless MEMORY_DEMO_MODEL names
-        # another. PLACEHOLDER prices, not gpt-6-luna's: set them from OpenAI's list.
+        # another. Its list prices, $0.10 / $0.50 per 1M tokens, October 2026.
         tracing={"enabled": True,
-                 "input_token_price_per_million_tokens": 2.0,
-                 "output_token_price_per_million_tokens": 8.0})
+                 "input_token_price_per_million_tokens": 0.10,
+                 "output_token_price_per_million_tokens": 0.50})
     agent.start()
 """
 

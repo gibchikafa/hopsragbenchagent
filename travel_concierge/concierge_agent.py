@@ -28,11 +28,11 @@ Deploy (git-backed, so the modules and profiles come along):
                         git_provider="GitHub", git_branch="main",
                         # Priced, or every traced turn costs 0.0 -- which reads as free
                         # rather than as unpriced. The model is gpt-6-luna unless
-                        # CONCIERGE_MODEL names another. PLACEHOLDER prices, not
-                        # gpt-6-luna's: set them from OpenAI's price list.
+                        # CONCIERGE_MODEL names another. Its list prices,
+                        # $0.10 / $0.50 per million tokens as of October 2026.
                         tracing={"enabled": True,
-                                 "input_token_price_per_million_tokens": 3.0,
-                                 "output_token_price_per_million_tokens": 15.0}).start()
+                                 "input_token_price_per_million_tokens": 0.10,
+                                 "output_token_price_per_million_tokens": 0.50}).start()
 """
 
 from __future__ import annotations

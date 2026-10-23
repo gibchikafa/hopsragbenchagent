@@ -12,7 +12,14 @@ Actions that need approval are held in the conversation's working memory and
 executed on the analyst's word, a turn later.
 
 Deploy (git-backed, so `store.py` and `prompts.py` come along):
-    agents.deploy_agent("cyber_guardian/guardian_agent_openai.py", name="cyberguardian-openai", ...)
+    agents.deploy_agent("cyber_guardian/guardian_agent_openai.py", name="cyberguardian-openai",
+                        # Priced, or every traced turn costs 0.0, which reads as free
+                        # rather than as unpriced. The model is gpt-6-luna unless
+                        # GUARDIAN_OPENAI_MODEL names another. Its list prices,
+                        # $0.10 / $0.50 per million tokens as of October 2026.
+                        tracing={"enabled": True,
+                                 "input_token_price_per_million_tokens": 0.10,
+                                 "output_token_price_per_million_tokens": 0.50}, ...)
 """
 
 from __future__ import annotations

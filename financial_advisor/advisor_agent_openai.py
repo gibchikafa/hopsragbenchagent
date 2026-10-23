@@ -12,11 +12,11 @@ Deploy (git-backed, so `prompts.py` and `advisor_memory.py` come along):
     agents.deploy_agent("financial_advisor/advisor_agent_openai.py", name="financialadvisor-openai",
                         # Priced, or every traced turn costs 0.0, which reads as free
                         # rather than as unpriced. The model is gpt-6-luna unless
-                        # ADVISOR_OPENAI_MODEL names another. PLACEHOLDER prices, not
-                        # gpt-6-luna's: set them from OpenAI's price list.
+                        # ADVISOR_OPENAI_MODEL names another. Its list prices,
+                        # $0.10 / $0.50 per million tokens as of October 2026.
                         tracing={"enabled": True,
-                                 "input_token_price_per_million_tokens": 2.0,
-                                 "output_token_price_per_million_tokens": 8.0}, ...)
+                                 "input_token_price_per_million_tokens": 0.10,
+                                 "output_token_price_per_million_tokens": 0.50}, ...)
 """
 
 from __future__ import annotations
