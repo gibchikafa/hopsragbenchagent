@@ -143,6 +143,12 @@ def _input_items(ctx, request) -> list[dict[str, Any]]:
 @agent_app.stream
 async def stream(request, ctx):
     """One handler serves both endpoints: the reply streams, and each tool call is a progress chip."""
+    # Who this is, before anything runs: bound from an address in the message, or asked
+    # for. See demo_users.who_first for why this is the application's job.
+    demo_users.bind_if_identified(ctx, request.text)
+    if question := demo_users.who_first(ctx):
+        yield question
+        return
     result = Runner.run_streamed(agent, _input_items(ctx, request), max_turns=10, run_config=_run_config)
     streamed = False
     async for event in result.stream_events():

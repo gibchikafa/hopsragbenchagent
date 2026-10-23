@@ -35,6 +35,6 @@ call is what stores it, not the sentence saying so.\
 WELCOME = (
     "I'm a demo of the Hopsworks agent memory service. Tell me something about "
     "yourself and I'll keep it; ask me what I remember and I'll show you every "
-    "tier: working, short-term and long-term. Say who you are and it follows "
-    "you into your next conversation."
+    "tier: working, short-term and long-term. What is your email address? Long-term "
+    "memory follows you into your next conversation under it."
 )

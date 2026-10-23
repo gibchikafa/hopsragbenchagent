@@ -286,6 +286,17 @@ async def stream(request, ctx):
     orchestrator calls shows as a progress chip; the analysts' own runs are inner and never stream."""
     if not request.text:
         raise AgentError("Paste the raw alert text.", code="invalid_request", status_code=400)
+    # Who is on shift, before any alert is worked, as the LangGraph entry point does: an
+    # address binds the conversation to that analyst, so what the agent remembers follows
+    # them to their next shift; without one, the question is the whole reply.
+    if not ctx.has_subject:
+        analyst = demo_users.match(request.text)
+        if analyst is None:
+            yield demo_users.WHO_IS_ON_SHIFT
+            return
+        ctx.rebind_subject(analyst)
+        yield f"Shift noted, {analyst}. Paste the alert and I'll take it from there."
+        return
     result = Runner.run_streamed(orchestrator, _input_items(ctx, request), max_turns=16, run_config=_run_config)
     streamed = False
     async for event in result.stream_events():

@@ -11,6 +11,8 @@ had as the same person, which is the only way to see memory working.
 
 from __future__ import annotations
 
+import re
+
 USERS = [
     {
         "id": "dana@example.com",
@@ -45,19 +47,69 @@ Then call `recall` before asking what you may already have been told, and `remem
 they tell you that would still be true on their next visit: a size, an allergy, a brand \
 they will not buy. What they are looking for today is not that."""
 
+#: An email address in what the user typed. Deliberately loose: a demo takes the
+#: address at face value, because there is nothing here to check it against.
+_ADDRESS = re.compile(r"[^\s<>@,;:]+@[^\s<>@,;:]+\.[A-Za-z]{2,}")
+
+#: What the agent says while nobody has said who they are: the question, the people this
+#: demo knows, and what it will do once it knows.
+ASK_WHO = (
+    "Before we start, what is your email address? I use it to remember your sizes and preferences between visits; this demo knows "
+    + ", ".join(u["id"] for u in USERS[:-1]) + " and " + USERS[-1]["id"]
+    + ", and any other address works too. Then I can find products in the shop, tell you about them, and order one when you're ready."
+)
+
+
+def claimed_address(text: str) -> str:
+    """The email address the user just gave, if they gave one."""
+    found = _ADDRESS.search(text or "")
+    return found.group(0).strip(".,;:").lower() if found else ""
+
+
+def bind_if_identified(ctx, text: str) -> str:
+    """Make long-term memory follow the person, once they have said who they are.
+
+    `identify`, the tool the model calls, only labels the conversation: it never decides
+    whose memory the conversation reads, because the caller there is a model acting on
+    text a user typed. With it alone every `remember(scope="user")` stayed with the
+    conversation, and the next visit as the same person knew nothing. Binding is the
+    application's call. Here the address is taken as typed, which is acceptable only
+    because these people are fictional; a real deployment asserts `subject` from its own
+    login and never reaches this path.
+    """
+    if getattr(ctx, "has_subject", False) and getattr(ctx, "subject_source", "") == "client":
+        return ctx.subject
+    address = claimed_address(text)
+    if address:
+        ctx.rebind_subject(address)
+        return address
+    return ctx.subject if getattr(ctx, "has_subject", False) else ""
+
+
+def who_first(ctx) -> str:
+    """The reply to give instead of running the agent, while nobody is identified.
+
+    Asked of the application rather than left to the prompt: told to ask first, a model
+    mostly does, and sometimes answers the request for nobody instead -- or identifies
+    the conversation with whatever string it has. Nothing done before it knows who this
+    is can be remembered for them, so until an address has been given the answer is the
+    question.
+    """
+    return "" if getattr(ctx, "has_subject", False) else ASK_WHO
+
 
 def already_identified(ctx) -> str:
-    """What to tell the model when the application already said who this is.
+    """What to tell the model when it does not need to ask who this is.
 
-    A real deployment has a login: the client asserts `subject` on each request — the user
-    id or address its own session knows — and the SDK keys memory by it without anyone
-    being asked anything. Asking is what a demo does instead, so the question is skipped
-    whenever the identity arrived with the request.
+    Either the application said so -- a real deployment has a login, and the client
+    asserts `subject` on each request -- or this demo bound it from an address given
+    earlier in the conversation. Both are the application's doing, so neither needs the
+    model to ask or to call `identify`.
     """
-    if not getattr(ctx, "has_subject", False) or getattr(ctx, "subject_source", "") != "client":
+    if not getattr(ctx, "has_subject", False):
         return ""
     return (
         f"\n\nThe application has already identified this person as {ctx.subject}. "
-        "Do not ask who they are. Greet them, call `recall` for what you already know, "
-        "and carry on."
+        "Do not ask who they are and do not call `identify`. Greet them, call `recall` "
+        "for what you already know, and carry on."
     )

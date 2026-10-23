@@ -5,7 +5,7 @@ uses memory in passing; this one exists to make it visible. It stores what you t
 it, recalls it in your next conversation, searches what you said before, forgets on
 request, and will print what is in each tier when you ask.
 
-No feature store, no data pipeline, one file to deploy.
+No feature store, no data pipeline, one folder to deploy.
 
 ## Files
 
@@ -13,6 +13,7 @@ No feature store, no data pipeline, one file to deploy.
 |---|---|
 | `memory_agent.py` | The agent: the SDK's memory tools on an OpenAI Agents SDK loop, served by `AgentApp` |
 | `prompts.py` | The prompt, including the two rules the evaluation suites hold it to |
+| `demo_users.py` | Asks who you are before anything else, and binds long-term memory to the address you give |
 | `demo_job.py` | Deploys the agent and talks to it, as a Hopsworks job: the job log is the demonstration |
 | `evaluation/` | Three suites: what it stored, what it must never invent, and when not to look things up |
 

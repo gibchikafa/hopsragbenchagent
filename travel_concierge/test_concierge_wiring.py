@@ -236,8 +236,27 @@ def test_the_question_is_skipped_when_the_client_already_knows(stubbed):
         has_subject=False, subject="conv-1", subject_source="conversation"
     )
     assert demo_users.already_identified(anonymous) == ""
-    # and so does one the agent worked out itself, which is already past the question
+    # and one the app bound from the address given earlier is past the question too: told
+    # nothing, the model asked again or called `identify` on every turn
     worked_out = types.SimpleNamespace(
         has_subject=True, subject="dana@example.com", subject_source="app"
     )
-    assert demo_users.already_identified(worked_out) == ""
+    assert "Do not ask who they are" in demo_users.already_identified(worked_out)
+
+
+def test_nobody_identified_is_asked_first_and_an_address_binds_them():
+    import types  # noqa: PLC0415
+
+    import demo_users  # noqa: PLC0415
+
+    bound = []
+    ctx = types.SimpleNamespace(
+        has_subject=False, subject="conv-1", subject_source="conversation",
+        rebind_subject=bound.append,
+    )
+    assert demo_users.bind_if_identified(ctx, "Hello there") == ""
+    question = demo_users.who_first(ctx)
+    assert "email address" in question and "dana@example.com" in question
+
+    assert demo_users.bind_if_identified(ctx, "It's Dana@Example.com.") == "dana@example.com"
+    assert bound == ["dana@example.com"]

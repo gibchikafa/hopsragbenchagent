@@ -17,15 +17,18 @@ What it demonstrates, in the order you meet it:
    aggressively here (every 6 messages, keeping 4) so it happens inside a demo
    chat rather than after an hour.
 3. **Long-term memory.** Semantic: `remember` / `recall` / `forget` write
-   facts that outlive the conversation, keyed by the person (`ctx.subject`)
-   once `identify` has been called. Episodic: `search` reads back the person's
+   facts that outlive the conversation, keyed by the person (`ctx.subject`),
+   which the app binds from the email address it asks for before anything else. Episodic: `search` reads back the person's
    own earlier conversations.
 
-Deploy it as a single file; it needs no feature store and no data:
+Deploy it git-backed, so `prompts.py` and `demo_users.py` come along; it needs no
+feature store and no data:
 
     agents = hopsworks.login().get_agent_serving()
     agent = agents.deploy_agent(
         "agent_memory/memory_agent.py", name="memorydemo",
+        git_url="https://github.com/<you>/hopsragbenchagent.git",
+        git_provider="GitHub", git_branch="main",
         # Priced, or every traced turn costs 0.0, which reads as free rather than
         # as unpriced. The model is gpt-6-luna unless MEMORY_DEMO_MODEL names
         # another. Its list prices, $0.10 / $0.50 per 1M tokens, October 2026.
@@ -52,6 +55,8 @@ from hopsworks_agents.protocol import (
     openai_summarizer,
 )
 from hopsworks_agents.protocol.autoevents import current_context
+
+import demo_users
 from openai.types.responses import ResponseTextDeltaEvent
 
 from prompts import SYSTEM_PROMPT, WELCOME
@@ -181,6 +186,7 @@ agent_app = AgentApp(
     framework="openai_agents",
     welcome_message=WELCOME,
     suggested_prompts=[
+        "dana@example.com",
         "I'm Dana, I live in Oslo and I'm vegetarian.",
         "What do you remember about me?",
         "Show me what's in each memory tier.",
@@ -207,7 +213,7 @@ def _input_items(ctx, request) -> list[dict[str, Any]]:
     the conversation without the token cost of all of it.
     """
     items: list[dict[str, Any]] = []
-    context = ctx.system_context()
+    context = ctx.system_context() + demo_users.already_identified(ctx)
     if context:
         items.append({"role": "user", "content": f"({context})"})
     for turn in ctx.history:
@@ -234,6 +240,13 @@ async def stream(request, ctx):
             code="invalid_request",
             status_code=400,
         )
+    # Who this is, before anything runs: bound from an address in the message, or asked
+    # for. Long-term memory is filed under the person, so nothing kept before then could
+    # follow them.
+    demo_users.bind_if_identified(ctx, request.text)
+    if question := demo_users.who_first(ctx):
+        yield question
+        return
     result = Runner.run_streamed(agent, _input_items(ctx, request), max_turns=8)
     streamed = False
     async for event in result.stream_events():

@@ -218,6 +218,12 @@ async def stream(request, ctx):
     """One handler serves both endpoints: the active agent's text streams to the traveler, and
     each tool call and hand-off shows as a progress chip. Agent-tools' own model calls are inner
     runs and never stream."""
+    # Who this is, before anything runs: bound from an address in the message, or asked
+    # for. See demo_users.who_first for why this is the application's job.
+    demo_users.bind_if_identified(ctx, request.text)
+    if question := demo_users.who_first(ctx):
+        yield question
+        return
     memory.load_scenario()
     result = Runner.run_streamed(
         starting_agent(), _input_items(ctx, request), max_turns=MAX_TURNS, run_config=_run_config

@@ -180,8 +180,11 @@ def import_tasks(suite, checks: list[dict], path: Path) -> int:
             continue
         if tuple(turns) in held:
             continue
+        # Who the task is asked as, when the row says: an agent that identifies people before
+        # it does anything else answers an anonymous task with the question and nothing more.
+        identity = {key: row[key] for key in ("subject", "context") if row.get(key)}
         suite.add_task(turns if len(turns) > 1 else turns[0],
-                       expectations=expectations_of(row, checks))
+                       expectations=expectations_of(row, checks), **identity)
         held.add(tuple(turns))
         added += 1
     return added

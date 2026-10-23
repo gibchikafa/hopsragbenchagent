@@ -122,6 +122,12 @@ def _user_content(request):
 async def stream(request, ctx):
     """One handler serves both endpoints; ctx.stream_langchain yields token
     deltas and turns each tool call into a progress chip."""
+    # Who this is, before anything runs: bound from an address in the message, or asked
+    # for. See demo_users.who_first for why this is the application's job.
+    demo_users.bind_if_identified(ctx, request.text)
+    if question := demo_users.who_first(ctx):
+        yield question
+        return
     content = _user_content(request)
     # the identity the client asserted, when there is one: a real deployment has a
     # login and does not ask
