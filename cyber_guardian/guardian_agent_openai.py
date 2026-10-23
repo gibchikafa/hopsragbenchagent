@@ -64,6 +64,17 @@ def _model_kwargs() -> dict[str, Any]:
         return {"model": LitellmModel(model=MODEL_NAME)}
     return {"model": MODEL_NAME} if MODEL_NAME else {}
 
+def _settings(temperature: float) -> ModelSettings:
+    """Temperature for a model that takes one.
+
+    gpt-6 and the o-series fix their own sampling and answer a request carrying
+    `temperature` with a 400, so on those every chat failed before the model ran.
+    """
+    model = MODEL_NAME.rsplit("/", 1)[-1]
+    if model.startswith(("gpt-6", "o1", "o3", "o4")):
+        return ModelSettings()
+    return ModelSettings(temperature=temperature)
+
 
 def _plain(tool: Any):
     return getattr(tool, "func", None) or getattr(tool, "coroutine", None) or tool
@@ -108,7 +119,7 @@ ANALYSTS = {
         name=name,
         instructions=instr,
         tools=[function_tool(_plain(TOOL_FOR[name]))],
-        model_settings=ModelSettings(temperature=0.0),
+        model_settings=_settings(0.0),
         **_model_kwargs(),
     )
     for name, instr in ANALYST_INSTR.items()
@@ -235,7 +246,7 @@ orchestrator = Agent(
     tools=[*ANALYST_TOOLS, *memory_tools("openai_agents"), *identity_tools("openai_agents"),
            function_tool(_plain(execute_response)), function_tool(_plain(create_incident)),
            hold_for_approval, pending_approvals, approve_pending],
-    model_settings=ModelSettings(temperature=0.0),
+    model_settings=_settings(0.0),
     **_model_kwargs(),
 )
 _run_config = RunConfig(tool_not_found_behavior="return_error_to_model")

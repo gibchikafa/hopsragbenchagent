@@ -160,7 +160,13 @@ def openai_stubbed(stubbed, monkeypatch):
         monkeypatch.setitem(sys.modules, name, module)
     agents = sys.modules["agents"]
     agents.Agent = _FakeAgent
-    agents.function_tool = lambda fn: types.SimpleNamespace(name=fn.__name__, description=fn.__doc__, fn=fn)
+    def function_tool(fn=None, **options):
+        def wrap(f):
+            return types.SimpleNamespace(name=f.__name__, description=f.__doc__, fn=f, **options)
+
+        return wrap(fn) if fn is not None else wrap
+
+    agents.function_tool = function_tool
     agents.ModelSettings = lambda **kw: kw
     agents.RunConfig = lambda **kw: kw
     agents.WebSearchTool = lambda: "web_search"
@@ -540,7 +546,7 @@ def test_a_reply_written_across_two_model_calls_is_two_paragraphs(openai_stubbed
 
     o.Runner = types.SimpleNamespace(run_streamed=lambda *a, **kw: Result())
     ctx = types.SimpleNamespace(
-        has_subject=False, subject_source="conversation", subject="conv-1",
+        has_subject=True, subject_source="client", subject="dana@example.com",
         history=[], system_context=lambda: "", rebind_subject=lambda s: None,
     )
     request = types.SimpleNamespace(text="Analyze MSFT for me.")
@@ -737,7 +743,7 @@ def test_the_stream_shows_the_analysts_report_between_the_two_calls(openai_stubb
 
     o.Runner = types.SimpleNamespace(run_streamed=lambda *a, **kw: Result())
     ctx = types.SimpleNamespace(
-        has_subject=False, subject_source="conversation", subject="conv-1",
+        has_subject=True, subject_source="client", subject="dana@example.com",
         history=[], system_context=lambda: "", rebind_subject=lambda s: None,
         emit_event=emit_event,
     )
@@ -754,3 +760,70 @@ def test_the_stream_shows_the_analysts_report_between_the_two_calls(openai_stubb
         "### Market analysis — from the data analyst\n\nMSFT report body.\n\n"
         "Next: your risk attitude and horizon."
     )
+
+
+def _openai_advisor(monkeypatch, model=None):
+    if model is None:
+        monkeypatch.delenv("ADVISOR_OPENAI_MODEL", raising=False)
+    else:
+        monkeypatch.setenv("ADVISOR_OPENAI_MODEL", model)
+    sys.modules["hopsworks_agents.protocol"].AgentApp = lambda **kw: types.SimpleNamespace(
+        stream=lambda fn: fn, chat=lambda fn: fn
+    )
+    for name in ("advisor_memory", "advisor_agent_openai"):
+        sys.modules.pop(name, None)
+    import advisor_agent_openai as o  # noqa: PLC0415
+
+    return o
+
+
+def test_no_temperature_is_sent_to_a_model_that_refuses_it(openai_stubbed, monkeypatch):
+    # gpt-6-luna answers a request carrying `temperature` with a 400, and the
+    # default model moved to it with temperature still set: every chat 500'd.
+    o = _openai_advisor(monkeypatch)
+    assert o.coordinator.model_settings == {}
+    assert o.data_analyst.model_settings == {}
+
+
+def test_a_model_that_takes_a_temperature_still_gets_it(openai_stubbed, monkeypatch):
+    o = _openai_advisor(monkeypatch, "gpt-5.4-mini-2026-03-17")
+    assert o.coordinator.model_settings == {"temperature": 0.0}
+    assert o.trading_analyst.model_settings == {"temperature": 0.2}
+
+
+def test_nobody_identified_is_asked_who_they_are_and_nothing_runs(openai_stubbed, monkeypatch):
+    # "Analyze NVDA for me." with no address went to identify("NVDA") and a full
+    # analysis for nobody, every time. The application answers that turn itself.
+    o = _openai_advisor(monkeypatch)
+    o.Runner = types.SimpleNamespace(
+        run_streamed=mock.MagicMock(side_effect=AssertionError("the model ran"))
+    )
+    ctx = types.SimpleNamespace(
+        has_subject=False, subject_source="conversation", subject="conv-1",
+        history=[], system_context=lambda: "", rebind_subject=lambda s: None,
+    )
+
+    import asyncio  # noqa: PLC0415
+
+    async def collect():
+        request = types.SimpleNamespace(text="Analyze NVDA for me.")
+        return "".join([d async for d in o.stream(request, ctx)])
+
+    reply = asyncio.run(collect())
+    assert "email address" in reply and "dana@example.com" in reply
+
+
+def test_an_analyst_the_turn_did_not_ask_for_is_not_offered(openai_stubbed, monkeypatch):
+    # Offered and refused, the call stayed in the trace, and "only the analysts the
+    # step needs" failed a turn that behaved correctly.
+    o = _openai_advisor(monkeypatch)
+    ctx = _Memory(text="Analyze MSFT for me.")
+    _mem, restore = _with(ctx)
+    try:
+        tools = {t.name: t for t in o.coordinator.tools}
+        assert tools["propose_strategies"].is_enabled(None, None) is False
+        assert tools["assess_risk"].is_enabled(None, None) is False
+        ctx.request.text = "Propose strategies for MSFT."
+        assert tools["propose_strategies"].is_enabled(None, None) is True
+    finally:
+        restore()

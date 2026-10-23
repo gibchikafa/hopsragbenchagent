@@ -39,7 +39,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agents import Agent, ModelSettings, RunConfig, Runner
+from agents import Agent, RunConfig, Runner
 from agents.stream_events import RawResponsesStreamEvent, RunItemStreamEvent
 from hopsworks_agents.protocol import (
     AgentApp,
@@ -66,7 +66,7 @@ from prompts import (
     PRETRIP_AGENT_INSTR,
     ROOT_AGENT_INSTR,
 )
-from tools import TOOLS_BY_AGENT, _model_kwargs
+from tools import TOOLS_BY_AGENT, _model_kwargs, _settings
 
 INSTRUCTIONS = {
     "inspiration_agent": INSPIRATION_AGENT_INSTR,
@@ -108,7 +108,7 @@ SUB_AGENTS: dict[str, Agent] = {
         handoff_description=what,
         instructions=_instructions(name),
         tools=TOOLS_BY_AGENT[name],
-        model_settings=ModelSettings(temperature=TEMPERATURE.get(name, 0.3)),
+        model_settings=_settings(TEMPERATURE.get(name, 0.3)),
         **_model_kwargs(),
     )
     for name, what in AGENTS.items()
@@ -121,7 +121,7 @@ root_agent = Agent(
     # this is: the sub-agents inherit the subject through the conversation
     tools=[*memory_tools("openai_agents"), *identity_tools("openai_agents")],
     handoffs=list(SUB_AGENTS.values()),
-    model_settings=ModelSettings(temperature=0.0),
+    model_settings=_settings(0.0),
     **_model_kwargs(),
 )
 # The recipe lets every sub-agent transfer to its peers and back to the root.

@@ -57,9 +57,21 @@ def _model_kwargs() -> dict[str, Any]:
     return {"model": MODEL_NAME} if MODEL_NAME else {}
 
 
+def _settings(temperature: float) -> ModelSettings:
+    """Temperature for a model that takes one.
+
+    gpt-6 and the o-series fix their own sampling and answer a request carrying
+    `temperature` with a 400, so on those every chat failed before the model ran.
+    """
+    model = MODEL_NAME.rsplit("/", 1)[-1]
+    if model.startswith(("gpt-6", "o1", "o3", "o4")):
+        return ModelSettings()
+    return ModelSettings(temperature=temperature)
+
+
 def _analyst(name: str, instructions: str, tools: list | None = None) -> Agent:
     return Agent(name=name, instructions=instructions, tools=tools or [],
-                 model_settings=ModelSettings(temperature=0.2), **_model_kwargs())
+                 model_settings=_settings(0.2), **_model_kwargs())
 
 
 data_analyst = _analyst("data_analyst", DATA_ANALYST_PROMPT, [WebSearchTool()])
@@ -90,7 +102,7 @@ async def analyze_market(ticker: str) -> str:
     return report
 
 
-@function_tool
+@function_tool(is_enabled=mem.asked_for("strategies"))
 async def propose_strategies(risk_attitude: str = "", investment_period: str = "") -> str:
     """The trading analyst: five or more strategies for the analyzed ticker and this profile.
     Reads the market analysis itself; call analyze_market first.
@@ -121,7 +133,7 @@ async def propose_strategies(risk_attitude: str = "", investment_period: str = "
     return report
 
 
-@function_tool
+@function_tool(is_enabled=mem.asked_for("plan"))
 async def plan_execution(selected_strategy: str = "", execution_preferences: str = "") -> str:
     """The execution analyst: how to enter, hold, scale and exit the chosen strategy. Reads the
     proposed strategies, the risk attitude and the period itself; call propose_strategies first.
@@ -147,7 +159,7 @@ async def plan_execution(selected_strategy: str = "", execution_preferences: str
     return report
 
 
-@function_tool
+@function_tool(is_enabled=mem.asked_for("risk"))
 async def assess_risk() -> str:
     """The risk analyst: the whole plan, analysis to execution, against the user's profile.
     Takes no input; reads the three earlier reports and the profile itself. Call it last."""
@@ -184,7 +196,7 @@ coordinator = Agent(
     # the memory tools the model calls itself, and `identify`, which says whose
     # memory this is
     tools=[*ANALYSTS, *memory_tools("openai_agents"), *identity_tools("openai_agents")],
-    model_settings=ModelSettings(temperature=0.0),
+    model_settings=_settings(0.0),
     **_model_kwargs(),
 )
 _run_config = RunConfig(tool_not_found_behavior="return_error_to_model")
@@ -249,6 +261,9 @@ async def stream(request, ctx):
     # demo_users.bind_if_identified for why taking the address as typed is acceptable
     # only because these three people are fictional.
     demo_users.bind_if_identified(ctx, request.text)
+    if question := demo_users.who_first(ctx):
+        yield question
+        return
     # After binding, so a profile stated here is filed under the person: the strategies
     # step then reads it rather than the model asking for what it was just told.
     mem.capture_profile(request.text)

@@ -65,6 +65,17 @@ def _model_kwargs() -> dict[str, Any]:
     chosen = model()
     return {"model": chosen} if chosen is not None else {}
 
+def _settings(temperature: float) -> ModelSettings:
+    """Temperature for a model that takes one.
+
+    gpt-6 and the o-series fix their own sampling and answer a request carrying
+    `temperature` with a 400, so on those every chat failed before the model ran.
+    """
+    model = MODEL_NAME.rsplit("/", 1)[-1]
+    if model.startswith(("gpt-6", "o1", "o3", "o4")):
+        return ModelSettings()
+    return ModelSettings(temperature=temperature)
+
 
 def _context_lines(_ctx=None, _agent=None) -> str:
     values = memory.prompt_context()
@@ -106,7 +117,7 @@ def _agent_tool(name: str, description: str, instruction: str, shape: type, key:
         handoff_description=description,
         instructions=_dynamic(instruction, with_trip),
         output_type=shape,
-        model_settings=ModelSettings(temperature=temperature),
+        model_settings=_settings(temperature),
         **_model_kwargs(),
     )
     return agent.as_tool(tool_name=name, tool_description=description, custom_output_extractor=_stores(key, shape))
@@ -159,7 +170,7 @@ itinerary_agent = Agent(
     handoff_description="Turn the agreed plan into the structured itinerary and store it as the trip's itinerary.",
     instructions=_dynamic(ITINERARY_AGENT_INSTR, with_trip=True),
     output_type=Itinerary,
-    model_settings=ModelSettings(temperature=0.1),
+    model_settings=_settings(0.1),
     **_model_kwargs(),
 ).as_tool(
     tool_name="itinerary_agent",
@@ -264,7 +275,7 @@ search_grounding = Agent(
     handoff_description="Answer a travel question from a current web search.",
     instructions=SEARCH_GROUNDING_INSTR,
     tools=[__import__("agents").WebSearchTool()],
-    model_settings=ModelSettings(temperature=0.0),
+    model_settings=_settings(0.0),
     **_model_kwargs(),
 ).as_tool(
     tool_name="search_grounding",
@@ -337,7 +348,7 @@ trip_monitor = Agent(
     handoff_description="Monitor the itinerary's bookings and flag what needs a change.",
     instructions=_monitor_instructions,
     tools=[flight_status_check, event_booking_check, weather_impact_check],
-    model_settings=ModelSettings(temperature=0.0),
+    model_settings=_settings(0.0),
     **_model_kwargs(),
 ).as_tool(
     tool_name="trip_monitor",
@@ -368,7 +379,7 @@ day_of = Agent(
     name="day_of_agent",
     handoff_description="Logistics for the leg the traveler is on right now.",
     instructions=_day_of_instructions,
-    model_settings=ModelSettings(temperature=0.2),
+    model_settings=_settings(0.2),
     **_model_kwargs(),
 ).as_tool(
     tool_name="day_of",

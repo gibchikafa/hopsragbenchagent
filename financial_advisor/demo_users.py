@@ -89,6 +89,30 @@ def bind_if_identified(ctx, text: str) -> str:
     return ctx.subject if getattr(ctx, "has_subject", False) else ""
 
 
+#: What the agent says when nobody has said who they are yet: what it does, and the question.
+ASK_WHO = (
+    "Before we get started, please share the email address you're speaking with. I use it to "
+    "remember you across conversations; this demo knows "
+    + ", ".join(u["id"] for u in USERS[:-1]) + " and " + USERS[-1]["id"]
+    + ", and any other address works too. Then I can analyze a ticker for you, propose trading "
+    "strategies for your risk attitude and horizon, plan how to execute one, and evaluate the risks."
+)
+
+
+def who_first(ctx) -> str:
+    """The reply to give instead of running the agent, while nobody is identified.
+
+    Asked of the application, not left to the prompt. Told to ask for the address first, the
+    model mostly did, but "Analyze NVDA for me." with no address went to `identify("NVDA")` --
+    the only string it had -- and then to a full analysis for nobody, every time. Nothing the
+    agent does before it knows who this is can be remembered for them, so until an address
+    has been given (this turn or an earlier one) the answer is the question.
+    """
+    if getattr(ctx, "has_subject", False):
+        return ""
+    return ASK_WHO
+
+
 def already_identified(ctx) -> str:
     """What to tell the model when it does not need to ask who this is.
 

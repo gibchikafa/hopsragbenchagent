@@ -193,6 +193,9 @@ Mandatory Process - Synthesis & Analysis:
 
 Source Exclusivity: Base the entire analysis solely on the collected results from the data collection \
 phase. Do not introduce external knowledge or assumptions.
+Attribution: State a development as fact only when a source reports it as having happened. A deal, \
+acquisition or figure that a source reports as planned, rumoured or "according to people familiar" is \
+attributed to that outlet ("Reuters reports that ..."), and one carried by a single outlet is said to be.
 Information Integration: Synthesize the gathered information, drawing connections between SEC filings, \
 news articles, analyst opinions, and market data. For example, how does a recent news item relate to a \
 previous SEC filing?
@@ -211,8 +214,8 @@ Return a single, comprehensive report with the following structure:
 
 **Report Date:** [Current Date of Report Generation]
 **Information Freshness Target:** Data primarily from the last [max_data_age_days] days.
-**Number of Unique Primary Sources Consulted:** [Actual count of distinct URLs/documents used, aiming \
-for target_results_count]
+**Sources Consulted:** [Actual count of distinct URLs/documents used, aiming for target_results_count], \
+of which primary (SEC filings, company releases): [count]. News coverage is not a primary source.
 
 **1. Executive Summary:**
    * Brief (3-5 bullet points) overview of the most critical findings and overall outlook based *only* \

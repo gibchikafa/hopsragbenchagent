@@ -31,7 +31,7 @@
   },
   {
     "name": "Introduced itself and showed the disclaimer",
-    "description": "Judges the recipe's opening: an introduction to the step-by-step process, the full disclaimer, and an invitation to start. No analysis before the user has agreed and given a ticker.",
+    "description": "Judges the recipe's opening: an introduction to the step-by-step process, the full disclaimer, and an invitation to start. No analysis before the user has agreed and given a ticker. Reads the task's rubric, so it runs in a suite and the platform refuses it as a monitor: it is about the first reply, and a sample grades whichever turn it drew.",
     "checks": [
       {
         "type": "llm_judge",
@@ -64,7 +64,8 @@
           "user_request",
           "agent_response",
           "tool_calls",
-          "tool_results"
+          "tool_results",
+          "rubric"
         ]
       }
     ]

@@ -325,6 +325,9 @@ async def stream(request, ctx):
     # keys memory, so making long-term memory follow the person is the application's
     # job. See demo_users.bind_if_identified.
     demo_users.bind_if_identified(ctx, request.text)
+    if question := demo_users.who_first(ctx):
+        yield question
+        return
     # after binding, so a profile stated here is filed under the person
     mem.capture_profile(request.text)
 

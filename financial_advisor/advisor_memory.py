@@ -253,6 +253,22 @@ def not_this_turn(step: str, text: str | None = None) -> str:
     )
 
 
+def asked_for(step: str):
+    """`is_enabled` for an analyst: offered to the model only on a turn that asked for its step.
+
+    The guard in each analyst still refuses a step this turn did not ask for, but a refusal
+    is a call: it stays in the trace, so a check that the agent ran only the analysts the
+    turn needed failed a turn where the model tried one early and was told "Not run". A tool
+    the model is never shown cannot be called. Recomputed before every model call of the
+    turn, so a step becomes available once the one before it has run.
+    """
+
+    def enabled(_run_context, _agent) -> bool:
+        return not not_this_turn(step)
+
+    return enabled
+
+
 def next_step_block() -> str:
     """The one thing to do next, for this state of the plan, told every turn."""
     step = next_step()
@@ -275,7 +291,11 @@ def next_step_block() -> str:
             "the investment period you do not have yet, and nothing else."
         )
     if step == "plan":
-        return "\n\nNext step: the execution plan, for the strategy the user chooses."
+        return (
+            "\n\nNext step: the execution plan. Ask which strategy to plan for and, in the same "
+            "question, whether they have execution preferences (broker, order types, how to scale in); "
+            "call plan_execution once they have chosen."
+        )
     if step == "risk":
         return "\n\nNext step: the risk evaluation of the whole plan."
     return ""
