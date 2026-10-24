@@ -44,10 +44,8 @@ EMAIL = re.compile(r"[^\s<>@,;]+@[^\s<>@,;]+\.[A-Za-z]{2,}")
 USERS_BLOCK = "\n".join(f"- {u['name']} ({u['id']}) — {u['note']}" for u in USERS)
 
 WHO_IS_ON_SHIFT = (
-    "Before we start: what is your email address? This demo knows\n\n"
-    + USERS_BLOCK
-    + "\n\nGive me the address and I will pick up where that analyst left off. Another "
-    "address is fine too; nothing here is a login."
+    "Before we start: what is your email address? I use it to pick up where you left off on "
+    "your last shift; for this demo, any address works, " + USERS[0]["id"] + " for example."
 )
 
 

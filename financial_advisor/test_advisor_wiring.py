@@ -212,8 +212,11 @@ def test_the_app_asks_who_is_there_and_the_prompt_never_does(stubbed):
     # The application asks before the model runs, naming the demo's people. Told to ask as
     # well, a model asked a client-identified person for their address against the note
     # saying who they were.
-    for user in demo_users.USERS:
-        assert user["id"] in demo_users.ASK_WHO
+    # One example address, not the list: two generic judges read the list as invented
+    # facts and as a leak of other people's addresses.
+    assert demo_users.USERS[0]["id"] in demo_users.ASK_WHO
+    for user in demo_users.USERS[1:]:
+        assert user["id"] not in demo_users.ASK_WHO
     assert "Never ask who they" in prompts.COORDINATOR_PROMPT
 
 

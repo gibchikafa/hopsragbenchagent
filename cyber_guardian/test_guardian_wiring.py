@@ -230,8 +230,11 @@ def test_an_analyst_is_identified_by_address_not_by_name(stubbed):
     # an analyst this demo never heard of still has an address
     assert demo_users.match("t.nguyen@acme.test") == "t.nguyen@acme.test"
     # the question names everyone, so an analyst can see who the demo knows
-    for user in demo_users.USERS:
-        assert user["id"] in demo_users.WHO_IS_ON_SHIFT
+    # One example address, not the list: two generic judges read the list as invented
+    # facts and as a leak of other people's addresses.
+    assert demo_users.USERS[0]["id"] in demo_users.WHO_IS_ON_SHIFT
+    for user in demo_users.USERS[1:]:
+        assert user["id"] not in demo_users.WHO_IS_ON_SHIFT
     assert "email address" in demo_users.WHO_IS_ON_SHIFT
 
 

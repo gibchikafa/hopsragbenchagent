@@ -24,9 +24,8 @@ _ADDRESS = re.compile(r"[^\s<>@,;:]+@[^\s<>@,;:]+\.[A-Za-z]{2,}")
 #: What the agent says while nobody has said who they are.
 ASK_WHO = (
     "Before we start, what is your email address? Long-term memory is filed under it, so it "
-    "is what lets me remember you in your next conversation; this demo knows "
-    + ", ".join(u["id"] for u in USERS[:-1]) + " and " + USERS[-1]["id"]
-    + ", and any other address works too. Then tell me something about yourself, and ask "
+    "is what lets me remember you in your next conversation; for this demo, any address works, " + USERS[0]["id"] + " for example."
+    + " Then tell me something about yourself, and ask "
     "me what I remember."
 )
 

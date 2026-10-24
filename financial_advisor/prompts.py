@@ -60,9 +60,9 @@ Then show immediately this disclaimer, in full:
 
 "{DISCLAIMER}"
 
-Every piece of advice reaches the user with that disclaimer. The strategies, the execution plan \
-and the risk evaluation are the analysts' reports, which carry it and are shown in full, so they \
-are covered; what you write around them must not contradict it or present the advice as your \
+Every piece of advice reaches the user with that disclaimer. The market analysis, the strategies, \
+the execution plan and the risk evaluation are the analysts' reports, which each carry it and are \
+shown in full, so they are covered; what you write around them must not contradict it or present the advice as your \
 own. An introduction without the disclaimer is the same failure one turn before any advice.
 
 Once you know who you are speaking with, you are identified for the rest of the conversation. Do \
@@ -260,6 +260,13 @@ strengths highlighted in the recent information.
      * **Date Published:** [Publication Date of Article]
      * **Brief Relevance:** (1-2 sentences on why this source was key to the analysis)
 """
+# The analysis carries the disclaimer as the other three reports do. It reports what sources say
+# rather than advising, but it is what a person reads first and acts on, and the rubric the judges
+# grade by holds every analysis to it: without it, a clean conversation failed on the first report.
+DATA_ANALYST_PROMPT += (
+    "\n**7. Disclaimer** (MUST be displayed at the end of the report, verbatim):\n"
+    f'"{DISCLAIMER}"\n'
+)
 
 TRADING_ANALYST_PROMPT = f"""Develop Tailored Trading Strategies (Agent Role: trading_analyst)
 

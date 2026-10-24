@@ -85,9 +85,8 @@ def bind_if_identified(ctx, text: str) -> str:
 #: What the agent says when nobody has said who they are yet: what it does, and the question.
 ASK_WHO = (
     "Before we get started, please share the email address you're speaking with. I use it to "
-    "remember you across conversations; this demo knows "
-    + ", ".join(u["id"] for u in USERS[:-1]) + " and " + USERS[-1]["id"]
-    + ", and any other address works too. Then I can analyze a ticker for you, propose trading "
+    "remember you across conversations; for this demo, any address works, " + USERS[0]["id"] + " for example."
+    + " Then I can analyze a ticker for you, propose trading "
     "strategies for your risk attitude and horizon, plan how to execute one, and evaluate the risks."
 )
 
