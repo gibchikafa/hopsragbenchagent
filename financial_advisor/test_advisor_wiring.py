@@ -944,3 +944,13 @@ def test_an_investment_goal_stated_with_the_profile_is_kept():
         assert ctx.store[mem.INVESTMENT_GOAL] == "dividend income"
     finally:
         restore()
+
+
+def test_after_a_report_the_coordinator_answers_the_users_own_question():
+    # The full report stays on the screen (a model that summarised announced reports it
+    # never showed); what was missing was the answer to what was asked -- "trading around
+    # earnings" got a general report with the earnings angle buried inside it.
+    import prompts  # noqa: PLC0415
+
+    assert "**For your question**" in prompts.COORDINATOR_PROMPT
+    assert "Each analyst's report is shown to the user in full" in prompts.COORDINATOR_PROMPT
