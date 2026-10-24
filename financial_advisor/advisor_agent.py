@@ -123,20 +123,22 @@ async def _analyst(system: str, brief: str, llm: Any = None) -> str:
 
 
 @tool
-async def analyze_market(ticker: str) -> str:
+async def analyze_market(ticker: str, focus: str = "") -> str:
     """The data analyst: a market analysis report for one ticker, from recent web sources.
 
     Args:
         ticker: The stock market ticker symbol to analyze, e.g. AAPL, GOOGL, MSFT.
+        focus: What the user wants the analysis to look at in particular, in their words, e.g. "trading around earnings"; empty for a general analysis.
     """
+    if problem := mem.not_this_turn("analysis"):
+        return problem
     ticker = ticker.strip().upper()
     if not ticker:
         return "Error: a ticker symbol is required."
-    report = await _analyst(
-        DATA_ANALYST_PROMPT,
-        f"provided_ticker: {ticker}\nmax_data_age_days: 7\ntarget_results_count: 10",
-        _researcher_llm,
-    )
+    brief = f"provided_ticker: {ticker}\nmax_data_age_days: 7\ntarget_results_count: 10"
+    if focus.strip():
+        brief += f"\nuser_focus: {focus.strip()} -- cover this specifically"
+    report = await _analyst(DATA_ANALYST_PROMPT, brief, _researcher_llm)
     _write(TICKER, ticker)
     _write(MARKET_ANALYSIS, report[:MAX_REPORT_CHARS])
     return report
@@ -330,6 +332,7 @@ async def stream(request, ctx):
         return
     # after binding, so a profile stated here is filed under the person
     mem.capture_profile(request.text)
+    mem.begin_turn()
 
     # The prompt, the rolling summary of folded turns, and where the process
     # stands: which reports exist, so a resumed conversation continues rather

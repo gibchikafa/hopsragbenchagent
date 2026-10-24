@@ -34,20 +34,14 @@ USERS = [
 
 USERS_BLOCK = "\n".join(f"- {u['name']} ({u['id']}) — {u['note']}" for u in USERS)
 
-IDENTITY_INSTRUCTIONS = f"""Before you plan anything, ask for the traveller's email address, and \
-wait for the answer. These are the people this demo knows:
+IDENTITY_INSTRUCTIONS = """The application knows who you are speaking with before you run: \
+it asks for their email address itself and binds memory to them, so by the time you read \
+this the person is identified. Never ask who they are or for an email address, and do not \
+call `identify`.
 
-{USERS_BLOCK}
-
-Ask for an email address, not a name: it is what identifies a traveller across trips, \
-and two people share a first name sooner than an address. Call `identify` with the \
-address exactly as they typed it. If they answer with a name instead, say you need the \
-address and ask again. An address that is not on the list is fine; this is a demo, not a \
-login.
-
-Then call `recall` before asking what you may already know, and `remember` what they tell \
-you that would still be true on their next trip: a seat they always take, a food they do \
-not eat, who travels with them. This trip's dates and destination are not that."""
+What is stored about them is given to you with the conversation; `recall` only what you \
+need and was not given. `remember` what they tell you that would still be true on their \
+next trip: a seat they always take, a food they do not eat, who travels with them. This trip's dates and destination are not that."""
 
 #: An email address in what the user typed. Deliberately loose: a demo takes the
 #: address at face value, because there is nothing here to check it against.

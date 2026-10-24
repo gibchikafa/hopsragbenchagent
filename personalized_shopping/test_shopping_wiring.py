@@ -201,12 +201,11 @@ def test_the_prompt_asks_who_is_shopping_before_searching(stubbed):
     import prompts  # noqa: PLC0415
 
     assert demo_users.IDENTITY_INSTRUCTIONS in prompts.SYSTEM_PROMPT
+    # The app asks before any search, naming the demo's people; the prompt tells the model
+    # not to ask again.
+    assert "Never ask who they are" in prompts.SYSTEM_PROMPT
     for user in demo_users.USERS:
-        assert user["id"] in prompts.SYSTEM_PROMPT
-    # asked before the first search, not after
-    assert prompts.SYSTEM_PROMPT.index(demo_users.USERS[0]["id"]) < prompts.SYSTEM_PROMPT.index(
-        "**Search.**"
-    )
+        assert user["id"] in demo_users.ASK_WHO
 
 
 def test_the_question_is_skipped_when_the_client_already_knows(stubbed):

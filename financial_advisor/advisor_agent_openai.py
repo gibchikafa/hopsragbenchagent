@@ -86,17 +86,25 @@ async def _report(analyst: Agent, brief: str) -> str:
     return str(result.final_output or "")
 
 
-@function_tool
-async def analyze_market(ticker: str) -> str:
+@function_tool(is_enabled=mem.asked_for("analysis"))
+async def analyze_market(ticker: str, focus: str = "") -> str:
     """The data analyst: a market analysis report for one ticker, from recent web sources.
 
     Args:
         ticker: The stock market ticker symbol to analyze, e.g. AAPL, GOOGL, MSFT.
+        focus: What the user wants the analysis to look at in particular, in their words, e.g. "trading around earnings"; empty for a general analysis.
     """
+    if problem := mem.not_this_turn("analysis"):
+        return problem
     ticker = ticker.strip().upper()
     if not ticker:
         return "Error: a ticker symbol is required."
-    report = await _report(data_analyst, f"provided_ticker: {ticker}\nmax_data_age_days: 7\ntarget_results_count: 10")
+    brief = f"provided_ticker: {ticker}\nmax_data_age_days: 7\ntarget_results_count: 10"
+    if focus.strip():
+        # What the person said they care about, so the report covers it: "trading around
+        # earnings" got a general analysis with no earnings date or expected move in it.
+        brief += f"\nuser_focus: {focus.strip()} -- cover this specifically"
+    report = await _report(data_analyst, brief)
     mem.write(mem.TICKER, ticker)
     mem.write(mem.MARKET_ANALYSIS, report)
     return report
@@ -140,7 +148,7 @@ async def plan_execution(selected_strategy: str = "", execution_preferences: str
 
     Args:
         selected_strategy: The strategy the user chose, by name or description; empty to plan for the set.
-        execution_preferences: The user's execution preferences, such as broker or order types; empty when none.
+        execution_preferences: Only what the user said about how to trade -- broker, order types, how to scale in or out -- in their words; empty when they said nothing. Not the strategy, not their goals: this is stored as their preference for next time.
     """
     if problem := mem.not_this_turn("plan"):
         return problem
@@ -187,7 +195,12 @@ ANALYSTS = [analyze_market, propose_strategies, plan_execution, assess_risk]
 
 
 def _coordinator_instructions(_ctx, _agent) -> str:
-    return COORDINATOR_PROMPT + mem.progress_block()
+    # Who this is goes in the instructions, beside the rule it overrides. Sent as a user
+    # message, a model that weighs user text below its instructions asked a client-identified
+    # person for their email address anyway, once in two.
+    ctx = mem.current_context.get(None)
+    who = demo_users.already_identified(ctx) if ctx is not None else ""
+    return COORDINATOR_PROMPT + who + mem.progress_block()
 
 
 coordinator = Agent(
@@ -238,7 +251,7 @@ def _input_items(ctx, request) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     # the identity the client asserted, when there is one: a real deployment has a login
     # and does not ask
-    summary = ctx.system_context() + demo_users.already_identified(ctx)
+    summary = ctx.system_context()
     if summary:
         items.append({"role": "user", "content": "(" + summary + ")"})
     for turn in ctx.history:
@@ -267,6 +280,7 @@ async def stream(request, ctx):
     # After binding, so a profile stated here is filed under the person: the strategies
     # step then reads it rather than the model asking for what it was just told.
     mem.capture_profile(request.text)
+    mem.begin_turn()
     result = Runner.run_streamed(coordinator, _input_items(ctx, request), max_turns=10, run_config=_run_config)
     streamed = False
     # One turn can produce several message items, and this model often produces

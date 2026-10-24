@@ -10,6 +10,7 @@ entry points read and write them through this module.
 from __future__ import annotations
 
 import re
+from contextvars import ContextVar
 
 from hopsworks_agents.protocol.autoevents import current_context
 
@@ -30,9 +31,12 @@ TICKER = "ticker"
 RISK_ATTITUDE = "user_risk_attitude"
 INVESTMENT_PERIOD = "user_investment_period"
 EXECUTION_PREFERENCES = "user_execution_preferences"
-#: The three above are the person's, not the plan's. One tuple, so a reader can
+#: What they are investing for. A model on its own invented this key, wrote under
+#: it, and nothing read it back; named here, it is shown with the rest.
+INVESTMENT_GOAL = "user_investment_goal"
+#: The keys above are the person's, not the plan's. One tuple, so a reader can
 #: see which keys outlive the conversation, and so the two scopes cannot drift.
-ABOUT_THE_PERSON = (RISK_ATTITUDE, INVESTMENT_PERIOD, EXECUTION_PREFERENCES)
+ABOUT_THE_PERSON = (RISK_ATTITUDE, INVESTMENT_PERIOD, EXECUTION_PREFERENCES, INVESTMENT_GOAL)
 
 
 def _scope_for(key: str) -> str:
@@ -97,6 +101,7 @@ def progress_block() -> str:
             ("risk attitude", read(RISK_ATTITUDE)),
             ("investment period", read(INVESTMENT_PERIOD)),
             ("execution preferences", read(EXECUTION_PREFERENCES)),
+            ("investment goal", read(INVESTMENT_GOAL)),
         )
         if value
     )
@@ -113,9 +118,14 @@ def progress_block() -> str:
         block += (
             "\n\nThis is your stored long-term memory of this person, read back for you: "
             + known
-            + ". You have it; you do not need to call `recall` to get it, and you may say "
+            + ". You have it; do not call `recall` for these keys, and you may say "
             "you remember it. Treat it as theirs and say where it came from if asked; do "
             "not ask for it again, and do not state anything else about them as remembered."
+        )
+    else:
+        block += (
+            "\n\nNothing is stored about this person yet, so `recall` would return nothing; "
+            "do not call it this turn."
         )
     # Named, because the model guessed. Told to `recall` but not told the keys, it asked
     # for "risk_attitude" and "investment_period", got nothing back, and told a returning
@@ -126,6 +136,10 @@ def progress_block() -> str:
         + ", ".join((*ABOUT_THE_PERSON, TICKER, MARKET_ANALYSIS, STRATEGIES,
                      EXECUTION_PLAN, RISK_EVALUATION))
         + ". A key you invent returns nothing, which does not mean nothing is stored."
+    )
+    block += (
+        " Store what they tell you about themselves only under those first four keys: "
+        "a key you invent is never read back to you."
     )
     if done:
         ticker = read(TICKER)
@@ -172,6 +186,17 @@ _ASKS_FOR = {
         r"(?<!-)\brisk\b(?!-|\s+(attitude|tolerance|appetite|profile|level))"
         r"|\bassess|\bevaluat", re.I),
 }
+#: A ticker the user named: what answers "which ticker?" and asks for nothing else.
+#: Two to five capitals, or a single one written $F: the "I" of "I want help" is not a ticker.
+_TICKER = re.compile(r"(?<![A-Za-z$])(?:[A-Z]{2,5}|\$[A-Z]{1,5})(?![A-Za-z])")
+#: A question for a verdict -- buy it, sell it, should I -- rather than for an analysis.
+#: It goes through the process: introduce, offer, and analyse once they agree.
+_ADVICE = re.compile(r"\b(should\s+i|buy|sell|worth\s+investing|invest\s+in)\b", re.I)
+#: Where the plan stood when this turn began, before any analyst ran in it.
+_STEP_AT_START: ContextVar[str | None] = ContextVar("advisor_step_at_start", default=None)
+#: Whether this turn's message stated part of the profile.
+_PROFILE_GIVEN: ContextVar[bool] = ContextVar("advisor_profile_given", default=False)
+
 _GO_ON = re.compile(
     r"^\W*(yes|yeah|yep|sure|ok(ay)?|please|go\s+ahead|continue|proceed|next|do\s+it|"
     r"sounds\s+good|let'?s\s+(go|do\s+it|continue))\b", re.I)
@@ -220,7 +245,19 @@ def capture_profile(text: str) -> dict[str, str]:
     if period:
         write(INVESTMENT_PERIOD, period)
         found["investment period"] = period
+    _PROFILE_GIVEN.set(bool(found))
     return found
+
+
+def begin_turn() -> None:
+    """Note where the plan stands before anything runs in this turn.
+
+    The step the conversation was at when the turn began is the one the user is
+    answering: "Aggressive, short-term." names no step, and is the answer to the
+    question asked for the strategies. Read later in the turn, after an analyst has
+    run, the plan has moved on and would say the wrong step.
+    """
+    _STEP_AT_START.set(next_step())
 
 
 def next_step() -> str:
@@ -238,6 +275,7 @@ def not_this_turn(step: str, text: str | None = None) -> str:
     """
     text = _turn_text() if text is None else text
     asked = {s for s in STEPS if _ASKS_FOR[s].search(text)}
+    at_start = _STEP_AT_START.get() or next_step()
     if asked:
         furthest = max(STEPS.index(s) for s in asked)
         if STEPS.index(step) <= furthest:
@@ -245,6 +283,17 @@ def not_this_turn(step: str, text: str | None = None) -> str:
     elif _GO_ON.search(text) and step == next_step():
         return ""
     elif not text.strip():
+        return ""
+    elif _ADVICE.search(text):
+        # "Should I buy Tesla?" asks for a verdict. The process gives one: introduce,
+        # offer the analysis, and run it when they agree -- not an analysis nobody
+        # asked for, before the introduction.
+        pass
+    elif step == "analysis" and _TICKER.search(text):
+        return ""
+    elif step != "analysis" and step == at_start:
+        # The answer to the question asked for this step: the profile for the
+        # strategies, the chosen strategy for the plan.
         return ""
     wanted = ", ".join(_STEP_NAME[s] for s in sorted(asked, key=STEPS.index)) or "nothing that needs an analyst"
     return (
@@ -273,6 +322,19 @@ def next_step_block() -> str:
     """The one thing to do next, for this state of the plan, told every turn."""
     step = next_step()
     profile = read(RISK_ATTITUDE) and read(INVESTMENT_PERIOD)
+    asked = [s for s in STEPS if _ASKS_FOR[s].search(_turn_text())]
+    if step and asked and STEPS.index(max(asked, key=STEPS.index)) > STEPS.index(step):
+        # A request that needs earlier steps first. Told plainly, because "one analyst
+        # per turn" read on its own stopped after the analysis and asked the user to
+        # request the strategies again.
+        furthest = max(asked, key=STEPS.index)
+        run = STEPS[STEPS.index(step): STEPS.index(furthest) + 1]
+        return (
+            f"\n\nThis turn asked for {_STEP_NAME[furthest]}, which needs "
+            + ", ".join(_STEP_NAME[s] for s in run[:-1])
+            + f" first. Run {', then '.join(_STEP_NAME[s] for s in run)} in this turn, in "
+            "that order, and stop after it."
+        )
     if step == "analysis":
         return (
             "\n\nNext step: the market analysis. If the user has not given a ticker, ask for "
@@ -280,6 +342,12 @@ def next_step_block() -> str:
             "investment period yet: they are needed for the strategies, which come after."
         )
     if step == "strategies":
+        if profile and _PROFILE_GIVEN.get():
+            return (
+                f"\n\nNext step: the trading strategies. The user has just given the profile "
+                f"({read(RISK_ATTITUDE)}, {read(INVESTMENT_PERIOD)}) in answer to your question: "
+                "call propose_strategies now."
+            )
         if profile:
             return (
                 f"\n\nNext step: the trading strategies. The profile is known ({read(RISK_ATTITUDE)}, "

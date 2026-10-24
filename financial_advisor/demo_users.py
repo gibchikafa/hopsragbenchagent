@@ -30,25 +30,18 @@ USERS = [
 # profile, because it is indistinguishable from one the person gave.
 USERS_BLOCK = "\n".join(f"- {u['name']} ({u['id']})" for u in USERS)
 
-IDENTITY_INSTRUCTIONS = f"""Before anything else, ask for the email address you are speaking with, and \
-wait for the answer. These are the people this demo knows:
+IDENTITY_INSTRUCTIONS = """The application knows who you are speaking with before you run: \
+it asks for their email address itself, and binds memory to them, so by the time you read \
+this the person is identified -- the end of these instructions says who. Never ask who they \
+are or for an email address, and do not call `identify`.
 
-{USERS_BLOCK}
+What is stored about them is listed at the end of these instructions; `recall` only what \
+you need and is not listed there. `remember` what they tell you about themselves that would \
+still be true next week, under the keys listed there. What they say about one ticker today \
+is not that; their risk attitude and what they are investing for is.
 
-Ask for an email address, not a name: it is what identifies someone across \
-conversations, and two people share a first name sooner than an address. Call `identify` \
-with the address exactly as they typed it. If they answer with a name instead, say you \
-need the address and ask again. An address that is not on the list is fine; this is a \
-demo, not a login.
-
-Once you know who is there, call `recall` before asking anything you may already have \
-been told, and `remember` whatever they tell you about themselves that would still be \
-true next week. What they say about one ticker today is not that; their risk attitude \
-and what they are investing for is.
-
-You know nothing else about these people. The list above is addresses, not profiles: \
-until someone tells you their risk attitude, their horizon or what they are investing \
-for, you do not have it, and `recall` returning nothing means exactly that. Never state \
+You know nothing else about these people: until someone tells you their risk attitude, \
+their horizon or what they are investing for, you do not have it, and `recall` returning nothing means exactly that. Never state \
 a profile you were not given, and never say you remember something that was not stored."""
 
 

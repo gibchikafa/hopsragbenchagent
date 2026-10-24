@@ -204,18 +204,17 @@ def test_the_coordinator_can_identify_and_remember(stubbed):
     assert advisor_agent.agent_app is not None
 
 
-def test_the_prompt_asks_who_is_there_before_advising(stubbed):
+def test_the_app_asks_who_is_there_and_the_prompt_never_does(stubbed):
     import demo_users  # noqa: PLC0415
     import prompts  # noqa: PLC0415
 
     assert demo_users.IDENTITY_INSTRUCTIONS in prompts.COORDINATOR_PROMPT
-    # the demo's people are in the prompt, so the agent can offer them
+    # The application asks before the model runs, naming the demo's people. Told to ask as
+    # well, a model asked a client-identified person for their address against the note
+    # saying who they were.
     for user in demo_users.USERS:
-        assert user["id"] in prompts.COORDINATOR_PROMPT
-    # and asked for before the introduction, not after
-    assert prompts.COORDINATOR_PROMPT.index(demo_users.USERS[0]["id"]) < prompts.COORDINATOR_PROMPT.index(
-        prompts.DISCLAIMER
-    )
+        assert user["id"] in demo_users.ASK_WHO
+    assert "Never ask who they" in prompts.COORDINATOR_PROMPT
 
 
 def test_the_question_is_skipped_when_the_client_already_knows(stubbed):
@@ -404,6 +403,7 @@ def test_what_the_person_said_outlives_the_conversation():
         mem.RISK_ATTITUDE,
         mem.INVESTMENT_PERIOD,
         mem.EXECUTION_PREFERENCES,
+        mem.INVESTMENT_GOAL,
     )
     for key in mem.ABOUT_THE_PERSON:
         assert mem._scope_for(key) == mem.USER_SCOPE
@@ -591,6 +591,9 @@ def _with(ctx):
 
     original = mem.current_context
     mem.current_context = Holder
+    # per-turn state starts empty, as it does in each request's own context
+    mem._STEP_AT_START.set(None)
+    mem._PROFILE_GIVEN.set(False)
     return mem, lambda: setattr(mem, "current_context", original)
 
 
@@ -827,3 +830,80 @@ def test_an_analyst_the_turn_did_not_ask_for_is_not_offered(openai_stubbed, monk
         assert tools["propose_strategies"].is_enabled(None, None) is True
     finally:
         restore()
+
+
+# ── round 7: the gate keys on the plan, not only on words ──────────────────
+
+
+def _gate(text, **reports):
+    ctx = _Memory(text=text, **reports)
+    mem, restore = _with(ctx)
+    try:
+        mem.capture_profile(text)
+        mem.begin_turn()
+        return mem, ctx, restore
+    except Exception:
+        restore()
+        raise
+
+
+def test_a_profile_given_in_answer_runs_the_strategies():
+    # "Aggressive, short-term." names no step; it answers the question asked for the
+    # strategies, and the strategies analyst was not offered, so nothing ran.
+    mem, _ctx, restore = _gate("Aggressive, short-term.", market_data_analysis_output="r")
+    try:
+        assert mem.not_this_turn("strategies") == ""
+        assert mem.not_this_turn("plan") != ""
+        assert "call propose_strategies now" in mem.next_step_block()
+    finally:
+        restore()
+
+
+def test_a_request_that_needs_an_earlier_step_says_to_run_both():
+    # "One analyst per turn" read alone stopped after the analysis and asked the user to
+    # request the strategies again.
+    mem, _ctx, restore = _gate("Propose strategies for AAPL.")
+    try:
+        assert mem.not_this_turn("analysis") == ""
+        assert mem.not_this_turn("strategies") == ""
+        note = mem.next_step_block()
+        assert "the market analysis, then the trading strategies" in note
+    finally:
+        restore()
+
+
+def test_should_i_buy_is_not_an_analysis_request():
+    # It went straight to a full report; the process introduces and offers first.
+    for text in (
+        "Can you tell me whether to buy Tesla right now?",
+        "Should I buy TSLA?",
+        "Hi, I want help with my investments.",
+        "Hello. What can you do for me?",
+    ):
+        mem, _ctx, restore = _gate(text)
+        try:
+            assert mem.not_this_turn("analysis") != "", text
+        finally:
+            restore()
+    # while a ticker given in answer, or an explicit request, still runs it
+    for text in ("MSFT", "Analyze NVDA for me.", "Yes please."):
+        mem, _ctx, restore = _gate(text)
+        try:
+            assert mem.not_this_turn("analysis") == "", text
+        finally:
+            restore()
+
+
+def test_who_this_is_goes_into_the_instructions(openai_stubbed, monkeypatch):
+    # As a user message, gpt-6-luna asked a client-identified person for their address.
+    o = _openai_advisor(monkeypatch)
+    ctx = _Memory(text="Hi")
+    ctx.has_subject = True
+    ctx.subject = "marcus@example.com"
+    ctx.subject_source = "client"
+    _mem, restore = _with(ctx)
+    try:
+        instructions = o._coordinator_instructions(None, None)
+    finally:
+        restore()
+    assert "already identified as marcus@example.com" in instructions
