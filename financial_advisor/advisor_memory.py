@@ -186,6 +186,22 @@ _ASKS_FOR = {
         r"(?<!-)\brisk\b(?!-|\s+(attitude|tolerance|appetite|profile|level))"
         r"|\bassess|\bevaluat", re.I),
 }
+#: A risk level stated as part of a profile: "moderate risk", "low-risk". Not a request for
+#: the risk evaluation, which "Moderate risk, medium-term. What strategies fit?" was read as --
+#: so the plan and the risk evaluation were offered on a turn that asked for the strategies,
+#: and the model ran all three.
+_RISK_LEVEL = re.compile(
+    r"\b(?:very\s+)?(?:low|moderate|medium|high|aggressive|conservative|balanced)[\s-]+risk\b",
+    re.I,
+)
+
+
+def asked_steps(text: str) -> list[str]:
+    """The steps this message asks for, in plan order."""
+    text = _RISK_LEVEL.sub(" ", text or "")
+    return [step for step in STEPS if _ASKS_FOR[step].search(text)]
+
+
 #: A ticker the user named: what answers "which ticker?" and asks for nothing else.
 #: Two to five capitals, or a single one written $F: the "I" of "I want help" is not a ticker.
 _TICKER = re.compile(r"(?<![A-Za-z$])(?:[A-Z]{2,5}|\$[A-Z]{1,5})(?![A-Za-z])")
@@ -212,6 +228,15 @@ _PERIODS = (
     ("short-term", r"short[\s-]term"),
     ("medium-term", r"medium[\s-]term|mid[\s-]term|(a\s+few|several|\d+)\s+months"),
     ("long-term", r"long[\s-]term|(\d+|several|many)\s+years|retirement"),
+)
+
+
+#: What the person is investing for, in their words: "focused on dividend income", "saving for
+#: retirement". Captured like the attitude and the horizon, rather than left to the model's
+#: `remember`, which stored it in one conversation and not in the next.
+_GOAL = re.compile(
+    r"\b(?:focused on|investing for|saving for|my goal is|goal is|aiming for)\s+([^.;!?\n]{3,80})",
+    re.I,
 )
 
 
@@ -245,6 +270,10 @@ def capture_profile(text: str) -> dict[str, str]:
     if period:
         write(INVESTMENT_PERIOD, period)
         found["investment period"] = period
+    goal = _GOAL.search(text or "")
+    if goal:
+        write(INVESTMENT_GOAL, goal.group(1).strip())
+        found["investment goal"] = goal.group(1).strip()
     _PROFILE_GIVEN.set(bool(found))
     return found
 
@@ -274,7 +303,7 @@ def not_this_turn(step: str, text: str | None = None) -> str:
     running ahead -- the plan asked for and the risk evaluation run as well.
     """
     text = _turn_text() if text is None else text
-    asked = {s for s in STEPS if _ASKS_FOR[s].search(text)}
+    asked = set(asked_steps(text))
     at_start = _STEP_AT_START.get() or next_step()
     if asked:
         furthest = max(STEPS.index(s) for s in asked)
@@ -322,7 +351,7 @@ def next_step_block() -> str:
     """The one thing to do next, for this state of the plan, told every turn."""
     step = next_step()
     profile = read(RISK_ATTITUDE) and read(INVESTMENT_PERIOD)
-    asked = [s for s in STEPS if _ASKS_FOR[s].search(_turn_text())]
+    asked = asked_steps(_turn_text())
     if step and asked and STEPS.index(max(asked, key=STEPS.index)) > STEPS.index(step):
         # A request that needs earlier steps first. Told plainly, because "one analyst
         # per turn" read on its own stopped after the analysis and asked the user to

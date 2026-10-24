@@ -910,3 +910,37 @@ def test_who_this_is_goes_into_the_instructions(openai_stubbed, monkeypatch):
     finally:
         restore()
     assert "already identified as marcus@example.com" in instructions
+
+
+# ── round 9 ─────────────────────────────────────────────────────────────────
+
+
+def test_a_risk_level_in_a_profile_is_not_a_request_for_the_risk_evaluation():
+    # "Moderate risk, medium-term. What strategies fit?" was read as asking for the
+    # risk evaluation too, so the plan and the risk analysts were offered on a turn
+    # that asked for the strategies, and the model ran all three.
+    import advisor_memory as mem  # noqa: PLC0415
+
+    assert mem.asked_steps("Moderate risk, medium-term. What strategies fit?") == ["strategies"]
+    assert mem.asked_steps("low-risk please, long term") == []
+    assert mem.asked_steps("Now evaluate the risk") == ["risk"]
+
+    mem_, ctx, restore = _gate(
+        "Moderate risk, medium-term. What strategies fit?", market_data_analysis_output="r"
+    )
+    try:
+        assert mem_.not_this_turn("strategies") == ""
+        assert mem_.not_this_turn("plan") != ""
+        assert mem_.not_this_turn("risk") != ""
+    finally:
+        restore()
+
+
+def test_an_investment_goal_stated_with_the_profile_is_kept():
+    # Left to the model's `remember`, the goal was stored in one conversation and
+    # not in the next.
+    mem, ctx, restore = _gate("Moderate, long-term, focused on dividend income.")
+    try:
+        assert ctx.store[mem.INVESTMENT_GOAL] == "dividend income"
+    finally:
+        restore()

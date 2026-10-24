@@ -49,7 +49,7 @@ _ADDRESS = re.compile(r"[^\s<>@,;:]+@[^\s<>@,;:]+\.[A-Za-z]{2,}")
 #: What the agent says while nobody has said who they are: the question, the people this
 #: demo knows, and what it will do once it knows.
 ASK_WHO = (
-    "Before we start, what is your email address? I use it to remember your sizes and preferences between visits; for this demo, any address works, " + USERS[0]["id"] + " for example."
+    "Before we start, what is your email address? This demo uses it to know who you are, and any address works, " + USERS[0]["id"] + " for example."
     + " Then I can find products in the shop, tell you about them, and order one when you're ready."
 )
 
