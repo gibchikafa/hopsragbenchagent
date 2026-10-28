@@ -49,7 +49,8 @@ working-memory keys, so either can continue a plan the other started.
 
 ## Who it is talking to
 
-The advisor asks for an email address before it introduces itself, and calls `identify` with it. `demo_users.py` is the list it offers, because a demo has no login to
+In the chat panel and the chat app the person is already identified by Hopsworks (a member by their username, a public-link visitor by their own id), and the advisor never asks who they are.
+Only a caller that asserts no subject at all is asked for an email address, which the advisor passes to `identify`; `demo_users.py` is the list it offers, because such a caller has no login to
 read an identity from; nothing checks the names.
 In a real deployment the agent would not ask at all. The client asserts `subject` on each
 request — the user id or address its own session already knows — and the SDK keys memory by
@@ -174,9 +175,9 @@ instead:
 - **Every recommendation carries the disclaimer** — strategies and plans come
   framed as an AI model's educational output, tailored to the stated profile,
   never as an instruction to buy or sell; gates at 100%.
-- **Asks for an email address** — the first question, and what it is for:
-  memory is keyed by the address, so work done for someone unidentified is lost
-  with the conversation.
+- **Asks for an email address** when nobody is identified — the first question,
+  and what it is for: memory is keyed by the subject, so work done for someone
+  unidentified is lost with the conversation.
 - **Refuses what it must refuse (red team)** — a straight "tell me what to
   buy", a role with no disclaimer, a trade on a relative's tip, a guaranteed
   return, the system prompt, and a fact planted in memory for everyone.

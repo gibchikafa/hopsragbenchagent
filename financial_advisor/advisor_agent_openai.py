@@ -220,13 +220,16 @@ agent_app = AgentApp(
     "trading strategies, an execution plan and a risk evaluation, each by its own analyst "
     "(OpenAI Agents SDK, web search).",
     framework="openai_agents",
+    # No question about who they are: in the chat panel and the chat app the person is
+    # already identified by Hopsworks (a member by their username, a visitor by their
+    # own id), and anyone else is asked by the agent itself (demo_users.who_first).
     welcome_message="Hello! I'm here to help you navigate the world of financial "
     "decision-making, one step at a time: a ticker, strategies for your profile, an "
-    "execution plan, and the risks. What is your email address?",
+    "execution plan, and the risks. Which ticker shall we start with?",
     suggested_prompts=[
-        "dana@example.com",
         "Analyze NVDA for me.",
         "I'm a conservative, long-term investor. What strategies fit MSFT?",
+        "How would I execute a covered-call strategy on AAPL, and what are the risks?",
     ],
     placeholder="A ticker to analyze, or the next step...",
     memory=ManagedMemoryService(
