@@ -256,7 +256,8 @@
       {
         "type": "python",
         "name": "chinook_checks",
-        "file": "Resources/agent_evals/checks/chinook_checks.py"
+        "git": "deployment",
+        "path": "chinook/evaluation/checks/chinook_checks.py"
       }
     ],
     "tags": [

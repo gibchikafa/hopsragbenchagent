@@ -256,7 +256,8 @@
       {
         "type": "python",
         "name": "shopping_checks",
-        "file": "Resources/agent_evals/checks/shopping_checks.py"
+        "git": "deployment",
+        "path": "personalized_shopping/evaluation/checks/shopping_checks.py"
       }
     ],
     "tags": []

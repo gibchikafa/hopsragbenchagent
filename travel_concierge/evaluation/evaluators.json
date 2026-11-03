@@ -141,7 +141,8 @@
       {
         "type": "python",
         "name": "concierge_checks",
-        "file": "Resources/agent_evals/checks/concierge_checks.py"
+        "git": "deployment",
+        "path": "travel_concierge/evaluation/checks/concierge_checks.py"
       }
     ],
     "tags": []

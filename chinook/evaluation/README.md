@@ -46,13 +46,15 @@ another project than the connected one.
 - **`evaluators.json`** — the library. One named check each, written once.
   Several suites hold the agent to "`place_order` was not called", and writing a
   judge's criteria into each of them separately is how they drift apart.
-- **`checks/*.py`** — checks written as code, declared with `@check`. `apply.py`
-  uploads each file to `Resources/agent_evals/checks/` and the library entry that
-  names it (`chinook_checks`) is in `evaluators.json` like any other; every check
-  the file declares runs under its own name, and none reads a task expectation, so
-  the same entry grades suites and live traffic. Try one on a laptop with
-  `run_check` from `hopsworks_agents.eval.checks`, or against last night's run
-  with `agents.runs.replay(run, fn)`.
+- **`checks/*.py`** — checks written as code, declared with `@check`. The library
+  entry that names the file (`chinook_checks`) is in `evaluators.json` like any
+  other and points at the deployment's own repository (`git: "deployment"`), so
+  the evaluation job reads the file at the commit the agent is running and the
+  checks version with the agent. Every check the file declares runs under its own
+  name, and none reads a task expectation, so the same entry grades suites and
+  live traffic. Try one on a laptop with `run_check` from
+  `hopsworks_agents.eval.checks`, or against last night's run with
+  `agents.runs.replay(run, fn)`.
 - **`suites.json`** — the suites: which library entries each uses, and which task
   file belongs to it.
 - **`tasks/*.jsonl`** — the cases, one file per suite. `apply.py` imports them;

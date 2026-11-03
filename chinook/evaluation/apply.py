@@ -242,16 +242,11 @@ def apply(agents, publish: bool = False, directory: Path = HERE,
     # The library first: a suite copies its checks in, so they have to exist as
     # something to copy. Saving is by name, so re-running updates an entry rather
     # than making a second one called the same thing.
-    # Checks written as code live in `checks/` beside the library and are uploaded
-    # first: a library entry that names the file is refused until the file is in
-    # the project. The entry itself is in evaluators.json like any other, so a
-    # suite names it exactly as it names a judge, and every @check in the file
-    # runs under its own name.
-    checks_dir = directory / "checks"
-    for file in sorted(checks_dir.glob("*.py")) if checks_dir.is_dir() else []:
-        agents.checks.upload(str(file), register=False)
-        print(f"+ {file.name} (uploaded to Resources/agent_evals/checks)")
-
+    # Checks written as code live in `checks/` beside the library and are read by
+    # the job from the deployment's own repository (`git: "deployment"`), at the
+    # commit the agent is running: the checks version with the agent, like its
+    # tests, and nothing has to be uploaded. The entry is in evaluators.json like
+    # any other, and every @check in the file runs under its own name.
     checks_by_name = {}
     saved = {entry.name: entry for entry in agents.evaluators.list()}
     for entry in library:

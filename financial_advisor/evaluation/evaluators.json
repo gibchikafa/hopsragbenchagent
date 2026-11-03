@@ -403,7 +403,8 @@
       {
         "type": "python",
         "name": "advisor_checks",
-        "file": "Resources/agent_evals/checks/advisor_checks.py"
+        "git": "deployment",
+        "path": "financial_advisor/evaluation/checks/advisor_checks.py"
       }
     ],
     "tags": [

@@ -181,7 +181,8 @@
       {
         "type": "python",
         "name": "guardian_checks",
-        "file": "Resources/agent_evals/checks/guardian_checks.py"
+        "git": "deployment",
+        "path": "cyber_guardian/evaluation/checks/guardian_checks.py"
       }
     ],
     "tags": []
