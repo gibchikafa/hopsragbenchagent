@@ -300,7 +300,7 @@ def apply(agents, publish: bool = False, directory: Path = HERE,
             # copied are the old ones; both are replaced from the files.
             agents.suites.set_checks(suite, _checks_of(definition, checks_by_name))
             for task in suite.tasks():
-                task.remove_from_suite()
+                agents.tasks.remove_from_suite(task)
         else:
             suite = agents.suites.create(
                 name,
