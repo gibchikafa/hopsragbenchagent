@@ -240,6 +240,16 @@ def apply(agents, publish: bool = False, directory: Path = HERE,
     # The library first: a suite copies its checks in, so they have to exist as
     # something to copy. Saving is by name, so re-running updates an entry rather
     # than making a second one called the same thing.
+    # Checks written as code live in `checks/` beside the library and are uploaded
+    # first: a library entry that names the file is refused until the file is in
+    # the project. The entry itself is in evaluators.json like any other, so a
+    # suite names it exactly as it names a judge, and every @check in the file
+    # runs under its own name.
+    checks_dir = directory / "checks"
+    for file in sorted(checks_dir.glob("*.py")) if checks_dir.is_dir() else []:
+        agents.checks.upload(str(file), register=False)
+        print(f"+ {file.name} (uploaded to Resources/agent_evals/checks)")
+
     checks_by_name = {}
     saved = {entry.name: entry for entry in agents.evaluators.list()}
     for entry in library:
@@ -259,17 +269,6 @@ def apply(agents, publish: bool = False, directory: Path = HERE,
             entry["name"], entry["checks"], entry["description"], tags=entry.get("tags")
         )
         print(f"+ {entry['name']} (library)")
-
-    # Checks written as code, from the directory beside the library. Uploading a file
-    # saves one entry for it (updated in place on a rerun); a suite names the entry
-    # exactly as it names a judge from evaluators.json, and every @check in the
-    # file runs.
-    checks_dir = directory / "checks"
-    tags = sorted({tag for entry in library for tag in (entry.get("tags") or [])})
-    for file in sorted(checks_dir.glob("*.py")) if checks_dir.is_dir() else []:
-        entry = agents.checks.upload(str(file), tags=tags)
-        checks_by_name[entry.name] = entry.checks
-        print(f"+ {entry.name} (library, every @check in {file.name})")
 
     existing = {}
     for suite in agents.suites.list():

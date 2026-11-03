@@ -133,5 +133,16 @@
         ]
       }
     ]
+  },
+  {
+    "name": "concierge_checks",
+    "description": "Code checks: payments are for this turn's reservations, the reservation price is quoted, a declined payment is said.",
+    "checks": [
+      {
+        "type": "python",
+        "file": "Resources/agent_evals/checks/concierge_checks.py"
+      }
+    ],
+    "tags": []
   }
 ]

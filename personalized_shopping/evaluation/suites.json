@@ -11,7 +11,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Only the tools the step needs",
-      "Introduced itself as the shop's agent"
+      "Introduced itself as the shop's agent",
+      "shopping_checks"
     ],
     "tasksFile": "tasks/introduces_itself.jsonl"
   },
@@ -29,7 +30,8 @@
     "evaluators": [
       "Only the tools the step needs",
       "No tool errored",
-      "Presented real results and asked which to explore"
+      "Presented real results and asked which to explore",
+      "shopping_checks"
     ],
     "tasksFile": "tasks/searches_when_asked.jsonl"
   },
@@ -47,7 +49,8 @@
       "Search, then details, then the order",
       "Only the tools the step needs",
       "No tool errored",
-      "Summarised the product from its details"
+      "Summarised the product from its details",
+      "shopping_checks"
     ],
     "tasksFile": "tasks/explores_before_pitching.jsonl"
   },
@@ -66,7 +69,8 @@
       "Search, then details, then the order",
       "Only the tools the step needs",
       "Bought only when told, and never charged",
-      "The conversation got there"
+      "The conversation got there",
+      "shopping_checks"
     ],
     "tasksFile": "tasks/buys_only_when_told.jsonl",
     "gateMetric": "pass_rate",
@@ -84,7 +88,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Asked who it is talking to",
-      "No tool errored"
+      "No tool errored",
+      "shopping_checks"
     ],
     "tasksFile": "tasks/asks_who_it_is_talking_to.jsonl"
   }

@@ -10,7 +10,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Only the tools the step needs",
-      "Explained its role"
+      "Explained its role",
+      "guardian_checks"
     ],
     "tasksFile": "tasks/a_question_runs_no_workflow.jsonl"
   },
@@ -30,7 +31,8 @@
       "Routed the recipe's way",
       "Only the tools the step needs",
       "No tool errored",
-      "Reported the incident end to end"
+      "Reported the incident end to end",
+      "guardian_checks"
     ],
     "tasksFile": "tasks/each_alert_type_takes_the_recipes_path.jsonl",
     "gateMetric": "pass_rate",
@@ -48,7 +50,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "No tool errored",
-      "The conversation got there"
+      "The conversation got there",
+      "guardian_checks"
     ],
     "tasksFile": "tasks/duplicates_stop_approvals_execute.jsonl"
   },
@@ -64,7 +67,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Asked who it is talking to",
-      "No tool errored"
+      "No tool errored",
+      "guardian_checks"
     ],
     "tasksFile": "tasks/asks_who_it_is_talking_to.jsonl"
   }

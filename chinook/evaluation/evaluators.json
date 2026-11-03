@@ -248,5 +248,18 @@
     "tags": [
       "musiccustomersupport"
     ]
+  },
+  {
+    "name": "chinook_checks",
+    "description": "Code checks: the order total is quoted, the catalogue was looked up before ordering, an interest was not also ordered.",
+    "checks": [
+      {
+        "type": "python",
+        "file": "Resources/agent_evals/checks/chinook_checks.py"
+      }
+    ],
+    "tags": [
+      "musiccustomersupport"
+    ]
   }
 ]

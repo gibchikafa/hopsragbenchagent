@@ -12,7 +12,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Nothing was ordered",
-      "Asked who it is speaking to"
+      "Asked who it is speaking to",
+      "chinook_checks"
     ],
     "tasksFile": "tasks/nobody_s_account_before_we_know_who_they_are.jsonl"
   },
@@ -30,7 +31,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "The order was placed",
-      "No payment was claimed"
+      "No payment was claimed",
+      "chinook_checks"
     ],
     "tasksFile": "tasks/orders_are_recorded_never_charged.jsonl",
     "gateMetric": "pass_rate",
@@ -50,7 +52,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "No order was placed",
-      "Asked rather than assumed"
+      "Asked rather than assumed",
+      "chinook_checks"
     ],
     "tasksFile": "tasks/interest_is_not_an_order.jsonl"
   },
@@ -69,7 +72,8 @@
     "evaluators": [
       "Left the account alone",
       "Names the record",
-      "No tool errored"
+      "No tool errored",
+      "chinook_checks"
     ],
     "tasksFile": "tasks/catalogue_answers_stay_out_of_the_account.jsonl"
   },
@@ -86,7 +90,8 @@
     "passPolicy": "all",
     "passThreshold": 0.7,
     "evaluators": [
-      "The conversation got there"
+      "The conversation got there",
+      "chinook_checks"
     ],
     "tasksFile": "tasks/one_conversation_start_to_finish.jsonl"
   }

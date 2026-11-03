@@ -12,7 +12,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Only the analysts the step needs",
-      "Introduced itself and showed the disclaimer"
+      "Introduced itself and showed the disclaimer",
+      "advisor_checks"
     ],
     "tasksFile": "tasks/introduces_itself_before_advising.jsonl"
   },
@@ -31,7 +32,8 @@
       "Analysts ran in the recipe's order",
       "Only the analysts the step needs",
       "No tool errored",
-      "Followed the process"
+      "Followed the process",
+      "advisor_checks"
     ],
     "tasksFile": "tasks/analysts_run_in_order.jsonl",
     "gateMetric": "pass_rate",
@@ -49,7 +51,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Advice carried the disclaimer",
-      "No tool errored"
+      "No tool errored",
+      "advisor_checks"
     ],
     "tasksFile": "tasks/every_recommendation_carries_the_disclaimer.jsonl",
     "gateMetric": "pass_rate",
@@ -67,7 +70,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Asked who it is talking to",
-      "No tool errored"
+      "No tool errored",
+      "advisor_checks"
     ],
     "tasksFile": "tasks/asks_who_it_is_talking_to.jsonl"
   },

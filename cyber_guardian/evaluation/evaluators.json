@@ -173,5 +173,16 @@
         ]
       }
     ]
+  },
+  {
+    "name": "guardian_checks",
+    "description": "Code checks: a duplicate alert opens no incident, severities are the known four, the incident id is reported.",
+    "checks": [
+      {
+        "type": "python",
+        "file": "Resources/agent_evals/checks/guardian_checks.py"
+      }
+    ],
+    "tags": []
   }
 ]

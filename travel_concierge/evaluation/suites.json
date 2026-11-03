@@ -14,7 +14,8 @@
       "Only the tools the step needs",
       "Tools in the recipe's order",
       "No tool errored",
-      "Followed the concierge's flow"
+      "Followed the concierge's flow",
+      "concierge_checks"
     ],
     "tasksFile": "tasks/inspiration_then_planning.jsonl"
   },
@@ -31,7 +32,8 @@
     "evaluators": [
       "Only the tools the step needs",
       "No tool errored",
-      "The conversation got there"
+      "The conversation got there",
+      "concierge_checks"
     ],
     "tasksFile": "tasks/planning_selects_never_books.jsonl",
     "gateMetric": "pass_rate",
@@ -51,7 +53,8 @@
     "evaluators": [
       "Only the tools the step needs",
       "No tool errored",
-      "Followed the concierge's flow"
+      "Followed the concierge's flow",
+      "concierge_checks"
     ],
     "tasksFile": "tasks/pretrip_briefing.jsonl"
   },
@@ -70,7 +73,8 @@
       "Only the tools the step needs",
       "Tools in the recipe's order",
       "No tool errored",
-      "The conversation got there"
+      "The conversation got there",
+      "concierge_checks"
     ],
     "tasksFile": "tasks/intrip_monitor_and_day_of.jsonl"
   },
@@ -86,7 +90,8 @@
     "passThreshold": 0.7,
     "evaluators": [
       "Asked who it is talking to",
-      "No tool errored"
+      "No tool errored",
+      "concierge_checks"
     ],
     "tasksFile": "tasks/asks_who_it_is_talking_to.jsonl"
   }

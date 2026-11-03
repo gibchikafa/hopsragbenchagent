@@ -359,5 +359,16 @@
         ]
       }
     ]
+  },
+  {
+    "name": "advisor_checks",
+    "description": "Code checks: advice carries the disclaimer, analysts ran in the recipe's order, the ticker is named in the answer.",
+    "checks": [
+      {
+        "type": "python",
+        "file": "Resources/agent_evals/checks/advisor_checks.py"
+      }
+    ],
+    "tags": []
   }
 ]
