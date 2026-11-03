@@ -7,6 +7,9 @@
         "type": "tool_call",
         "name": "only_the_analysts_needed"
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -17,6 +20,9 @@
         "type": "tool_order",
         "name": "analysts_in_order"
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -27,6 +33,9 @@
         "type": "no_tool_error",
         "name": "no_tool_errored"
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -68,6 +77,9 @@
           "rubric"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -108,6 +120,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -145,6 +160,9 @@
           "rubric"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -174,6 +192,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -210,6 +231,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -246,6 +270,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -282,6 +309,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -318,6 +348,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -358,6 +391,9 @@
           "tool_results"
         ]
       }
+    ],
+    "tags": [
+      "financialadvisor"
     ]
   },
   {
@@ -370,6 +406,8 @@
         "file": "Resources/agent_evals/checks/advisor_checks.py"
       }
     ],
-    "tags": []
+    "tags": [
+      "financialadvisor"
+    ]
   }
 ]
