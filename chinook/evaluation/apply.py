@@ -265,9 +265,11 @@ def apply(agents, publish: bool = False, directory: Path = HERE,
             if not new_version or not _checks_differ(existing_entry, entry["checks"]):
                 print(f"= {entry['name']} (library, exists)")
                 continue
-            agents.evaluators.save(
-                entry["name"], entry["checks"], entry["description"],
-                tags=entry.get("tags")
+            # update, not save: save always creates, and two entries under one
+            # name is the sprawl a shared library exists to avoid.
+            agents.evaluators.update(
+                existing_entry, checks=entry["checks"], description=entry["description"],
+                tags=entry.get("tags"),
             )
             print(f"~ {entry['name']} (library, updated)")
             continue
