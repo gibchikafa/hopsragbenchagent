@@ -215,9 +215,18 @@ def _checks_differ(entry, checks) -> bool:
         one = dict(one)
         return (one.pop("type", ""), one.pop("name", ""), json.dumps(one, sort_keys=True))
 
+    # The SDK hands a saved entry's checks back as flat dicts; `declared` is the
+    # backend's own note of what a file declares and is no part of the file's spec.
     stored = [
-        (check.type, check.name, json.dumps(check.settings, sort_keys=True))
-        for check in (entry.checks or [])
+        (
+            one.get("type", ""),
+            one.get("name", ""),
+            json.dumps(
+                {k: v for k, v in one.items() if k not in ("type", "name", "declared")},
+                sort_keys=True,
+            ),
+        )
+        for one in (entry.checks or [])
     ]
     return stored != [shape(one) for one in checks]
 
