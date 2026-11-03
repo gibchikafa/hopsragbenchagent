@@ -260,6 +260,16 @@ def apply(agents, publish: bool = False, directory: Path = HERE,
         )
         print(f"+ {entry['name']} (library)")
 
+    # Checks written as code, from the directory beside the library. Uploading a file
+    # saves one entry per check it declares (and updates an entry of the same name),
+    # so a suite names them exactly as it names a judge from evaluators.json.
+    checks_dir = directory / "checks"
+    tags = sorted({tag for entry in library for tag in (entry.get("tags") or [])})
+    for file in sorted(checks_dir.glob("*.py")) if checks_dir.is_dir() else []:
+        for entry in agents.checks.upload(str(file), tags=tags):
+            checks_by_name[entry.name] = entry.checks
+            print(f"+ {entry.name} (library, python check from {file.name})")
+
     existing = {}
     for suite in agents.suites.list():
         # the newest version of each name is the one tasks go to
