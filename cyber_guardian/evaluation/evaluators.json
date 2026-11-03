@@ -185,6 +185,8 @@
         "path": "cyber_guardian/evaluation/checks/guardian_checks.py"
       }
     ],
-    "tags": []
+    "tags": [
+      "custom-code"
+    ]
   }
 ]

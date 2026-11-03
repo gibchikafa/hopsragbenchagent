@@ -260,6 +260,8 @@
         "path": "personalized_shopping/evaluation/checks/shopping_checks.py"
       }
     ],
-    "tags": []
+    "tags": [
+      "custom-code"
+    ]
   }
 ]

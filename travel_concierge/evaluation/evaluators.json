@@ -145,6 +145,8 @@
         "path": "travel_concierge/evaluation/checks/concierge_checks.py"
       }
     ],
-    "tags": []
+    "tags": [
+      "custom-code"
+    ]
   }
 ]
