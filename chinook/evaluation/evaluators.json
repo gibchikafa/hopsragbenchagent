@@ -255,6 +255,7 @@
     "checks": [
       {
         "type": "python",
+        "name": "chinook_checks",
         "file": "Resources/agent_evals/checks/chinook_checks.py"
       }
     ],

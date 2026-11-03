@@ -199,7 +199,9 @@ def _checks_of(definition, checks_by_name) -> list[dict]:
     return [
         {
             "type": check.pop("type"),
-            "name": check.pop("name"),
+            # A row's name defaults to the entry's: a code-check entry is one row
+            # for one file, and the file's checks report under their own names.
+            "name": check.pop("name", entry_name),
             "config": json.dumps(check),
         }
         for entry_name in definition["evaluators"]

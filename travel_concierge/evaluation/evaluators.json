@@ -140,6 +140,7 @@
     "checks": [
       {
         "type": "python",
+        "name": "concierge_checks",
         "file": "Resources/agent_evals/checks/concierge_checks.py"
       }
     ],

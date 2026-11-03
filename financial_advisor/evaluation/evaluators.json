@@ -366,6 +366,7 @@
     "checks": [
       {
         "type": "python",
+        "name": "advisor_checks",
         "file": "Resources/agent_evals/checks/advisor_checks.py"
       }
     ],

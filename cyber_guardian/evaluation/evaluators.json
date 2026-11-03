@@ -180,6 +180,7 @@
     "checks": [
       {
         "type": "python",
+        "name": "guardian_checks",
         "file": "Resources/agent_evals/checks/guardian_checks.py"
       }
     ],
