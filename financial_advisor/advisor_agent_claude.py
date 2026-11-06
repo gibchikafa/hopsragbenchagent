@@ -23,11 +23,12 @@ form connects (`CLAUDE_CODE_OAUTH_TOKEN`):
                         environment="python-agent-pipeline",
                         # Priced, or every traced turn costs 0.0, which reads as free
                         # rather than as unpriced. List prices per million tokens for
-                        # claude-opus-5-5, the default ADVISOR_CLAUDE_MODEL, when this
-                        # was written; change them when you change the model.
+                        # the Opus the bundled Claude Code resolves `opus` to
+                        # (claude-opus-5 and 5.5 list at $5/$25 and $4/$20 when this was
+                        # written); change them when you change the model.
                         tracing={"enabled": True,
-                                 "input_token_price_per_million_tokens": 4.0,
-                                 "output_token_price_per_million_tokens": 20.0}).start()
+                                 "input_token_price_per_million_tokens": 5.0,
+                                 "output_token_price_per_million_tokens": 25.0}).start()
 """
 
 from __future__ import annotations
@@ -69,8 +70,12 @@ from prompts import (
     TRADING_ANALYST_PROMPT,
 )
 
-#: The coordinator and the analysts. An alias the CLI knows ("opus", "sonnet") works too.
-MODEL = os.environ.get("ADVISOR_CLAUDE_MODEL", "claude-opus-5-5")
+#: The coordinator and the analysts. The default is an alias the bundled Claude Code
+#: resolves to its current Opus, rather than a model id: the SDK the platform image
+#: pins decides which Claude Code build runs, and a build answers an id it predates
+#: with "400 Claude Code 2.1.215 does not support this model" -- which is what
+#: `claude-opus-5-5` got on the 5.3.0 image. A full id works on a build that knows it.
+MODEL = os.environ.get("ADVISOR_CLAUDE_MODEL", "opus")
 #: how many web searches the data analyst may run per report; each is a paid call
 MAX_SEARCHES = int(os.environ.get("ADVISOR_MAX_SEARCHES", "8"))
 #: The in-process MCP server the coordinator's tools live on. The SDK names a tool

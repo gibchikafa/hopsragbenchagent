@@ -46,7 +46,7 @@ explained by the coordinator, rather than twice.
 `advisor_agent.py` runs on LangGraph with Claude and its web search; `advisor_agent_openai.py`
 on the OpenAI Agents SDK with `gpt-6-luna` and the SDK's `WebSearchTool` (`OPENAI_API_KEY`),
 or any LiteLLM model name in `ADVISOR_OPENAI_MODEL`; `advisor_agent_claude.py` on the
-Claude Agent SDK with `claude-opus-5-5` (`ADVISOR_CLAUDE_MODEL`). All three keep the reports
+Claude Agent SDK with the Opus its Claude Code build resolves `opus` to (`ADVISOR_CLAUDE_MODEL`). All three keep the reports
 in the same working-memory keys, so any can continue a plan another started.
 
 The Claude Agent SDK one differs in how the pieces run, and each difference is the SDK's shape:
@@ -178,7 +178,7 @@ disclaimer` are written.
 | `OPENAI_API_KEY` | `advisor_agent_openai.py`: the agents, the web search and the memory summariser (`openai_summarizer`). |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `advisor_agent_claude.py`: set by the platform when the deployment is connected to a Claude Code login; `ANTHROPIC_API_KEY` wins when both are present. |
 | `ADVISOR_MODEL` | `advisor_agent.py`: model for the coordinator and the analysts. Default `claude-sonnet-4-5`. |
-| `ADVISOR_CLAUDE_MODEL` | `advisor_agent_claude.py`: model for the coordinator and the analysts, as a full id or a CLI alias (`opus`, `sonnet`). Default `claude-opus-5-5`. |
+| `ADVISOR_CLAUDE_MODEL` | `advisor_agent_claude.py`: model for the coordinator and the analysts, as a CLI alias (`opus`, `sonnet`) or a full id. Default `opus`, the current Opus of the Claude Code build the image's `claude-agent-sdk` bundles; a full id the build predates fails with `400 ... does not support this model` (the 5.3.0 image's build, 2.1.215, does not know `claude-opus-5-5`). |
 | `ADVISOR_MAX_SEARCHES` | Web searches the data analyst may run per report (both Claude entry points). Default 8; each is a paid call. |
 
 ## Evaluation
