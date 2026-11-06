@@ -129,7 +129,8 @@ async def test_reports_are_kept_in_this_conversations_working_memory(stubbed):
 
     strategies = await advisor_agent.propose_strategies("conservative", "long-term")
     assert strategies.startswith("REPORT")
-    assert store[("session", "conv-1", advisor_agent.RISK_ATTITUDE)] == "conservative"
+    # the attitude is the person's, not the plan's: `user` scope, owned by the subject
+    assert store[("user", ctx.subject, advisor_agent.RISK_ATTITUDE)] == "conservative"
     # the next step now has what it needs, and the progress block says so
     assert "market analysis, trading strategies" in advisor_agent._progress_block()
 
@@ -954,3 +955,266 @@ def test_after_a_report_the_coordinator_answers_the_users_own_question():
 
     assert "**For your question**" in prompts.COORDINATOR_PROMPT
     assert "Each analyst's report is shown to the user in full" in prompts.COORDINATOR_PROMPT
+
+
+# ── the Claude Agent SDK entry point ─────────────────────────────────────────
+
+
+class _Block:
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+
+class _TextBlock(_Block):
+    pass
+
+
+class _ToolUseBlock(_Block):
+    pass
+
+
+class _ToolResultBlock(_Block):
+    pass
+
+
+class _AssistantMessage(_Block):
+    pass
+
+
+class _UserMessage(_Block):
+    pass
+
+
+class _ResultMessage(_Block):
+    is_error = False
+    result = ""
+
+
+class _StreamEvent(_Block):
+    pass
+
+
+@pytest.fixture
+def claude_stubbed(stubbed, monkeypatch):
+    sdk = types.ModuleType("claude_agent_sdk")
+    sdk.__getattr__ = lambda _n: mock.MagicMock()
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", sdk)
+
+    def tool(name, description, schema):
+        def wrap(fn):
+            return types.SimpleNamespace(name=name, description=description, input_schema=schema, handler=fn)
+
+        return wrap
+
+    sdk.tool = tool
+    sdk.create_sdk_mcp_server = lambda name, version, tools: {"name": name, "tools": tools}
+    sdk.ClaudeAgentOptions = lambda **kw: kw
+    sdk.HookMatcher = lambda **kw: kw
+    sdk.TextBlock, sdk.ToolUseBlock, sdk.ToolResultBlock = _TextBlock, _ToolUseBlock, _ToolResultBlock
+    sdk.AssistantMessage, sdk.UserMessage, sdk.ResultMessage = _AssistantMessage, _UserMessage, _ResultMessage
+    sdk.StreamEvent = _StreamEvent
+    protocol = sys.modules["hopsworks_agents.protocol"]
+    protocol.AgentApp = lambda **kw: types.SimpleNamespace(stream=lambda fn: fn, chat=lambda fn: fn, kwargs=kw)
+    for name in ("advisor_memory", "advisor_agent_claude"):
+        sys.modules.pop(name, None)
+    yield
+
+
+def _delta(text):
+    return _StreamEvent(event={"type": "content_block_delta", "index": 0,
+                               "delta": {"type": "text_delta", "text": text}})
+
+
+def _message_start():
+    return _StreamEvent(event={"type": "message_start", "message": {}})
+
+
+def _ctx(**more):
+    async def emit_event(*_a, **_kw):
+        return None
+
+    base = dict(has_subject=True, subject_source="client", subject="dana@example.com",
+                history=[], system_context=lambda: "", rebind_subject=lambda s: None,
+                emit_event=emit_event)
+    base.update(more)
+    return types.SimpleNamespace(**base)
+
+
+def _collect(agent, text, ctx):
+    import asyncio  # noqa: PLC0415
+
+    async def run():
+        return "".join([d async for d in agent.stream(types.SimpleNamespace(text=text), ctx)])
+
+    return asyncio.run(run())
+
+
+def test_the_claude_variant_has_the_four_analysts_on_its_mcp_server(claude_stubbed):
+    import advisor_agent_claude as c  # noqa: PLC0415
+    import advisor_memory  # noqa: PLC0415
+
+    assert c.agent_app is not None
+    assert c.agent_app.kwargs["framework"] == "claude_agents"
+    assert [t.name for _step, t in c.ANALYSTS] == list(ANALYSTS)
+    for _step, analyst in c.ANALYSTS:
+        assert analyst.description, f"{analyst.name} has no description for the model"
+        assert analyst.input_schema["additionalProperties"] is False
+    # the same working memory as the other entry points, so any can resume another's plan
+    assert c.mem is advisor_memory
+    # the schema requires what the signature does: the ticker, and nothing of assess_risk
+    by_name = {t.name: t for _s, t in c.ANALYSTS}
+    assert by_name["analyze_market"].input_schema["required"] == ["ticker"]
+    assert "earnings" in by_name["analyze_market"].input_schema["properties"]["focus"]["description"]
+    assert by_name["assess_risk"].input_schema["properties"] == {}
+
+
+def test_only_the_data_analyst_can_search_and_no_run_has_claude_code_tools(claude_stubbed):
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    researcher = c._researcher_options()
+    assert researcher["tools"] == ["WebSearch"] and researcher["allowed_tools"] == ["WebSearch"]
+    assert researcher["setting_sources"] == []
+    assert researcher["hooks"]["PreToolUse"][0]["matcher"] == "WebSearch"
+    # every other analyst: the prompt, no tools at all
+    plain = c._options(c.TRADING_ANALYST_PROMPT)
+    assert plain["tools"] == [] and "mcp_servers" not in plain
+
+
+def test_the_search_budget_is_a_refusal_not_the_end_of_the_run(claude_stubbed):
+    # max_turns would stop the run with the error as the report; a refused search
+    # tells the model to write from what it has read
+    import asyncio  # noqa: PLC0415
+
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    hook = c._search_cap(2)
+
+    async def run():
+        return [await hook({}, None, {}) for _ in range(3)]
+
+    first, second, third = asyncio.run(run())
+    assert first == {} and second == {}
+    decision = third["hookSpecificOutput"]
+    assert decision["permissionDecision"] == "deny"
+    assert "2 searches" in decision["permissionDecisionReason"]
+
+
+def test_an_analysts_report_is_the_result_or_the_last_thing_it_wrote(claude_stubbed):
+    import asyncio  # noqa: PLC0415
+
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    def fake_query(messages):
+        async def query(prompt, options):
+            for message in messages:
+                yield message
+
+        return query
+
+    # a clean run: the result message is the report
+    c.query = fake_query([
+        _AssistantMessage(content=[_TextBlock(text="Searching...")]),
+        _AssistantMessage(content=[_TextBlock(text="# Report")]),
+        _ResultMessage(result="# Report", is_error=False),
+    ])
+    assert asyncio.run(c._run("brief", {})) == "# Report"
+    # a run that hit its turn cap: the result is the error, the report is what was written
+    c.query = fake_query([
+        _AssistantMessage(content=[_TextBlock(text="# Partial report")]),
+        _ResultMessage(result="Reached max turns", is_error=True),
+    ])
+    assert asyncio.run(c._run("brief", {})) == "# Partial report"
+
+
+def test_the_claude_stream_shows_the_report_between_the_two_calls(claude_stubbed):
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    events = [
+        _message_start(), _delta("Let's start with "), _delta("the market analysis."),
+        _AssistantMessage(content=[_TextBlock(text="Let's start with the market analysis."),
+                                   _ToolUseBlock(id="t1", name="mcp__advisor__analyze_market",
+                                                 input={"ticker": "MSFT"})]),
+        _UserMessage(content=[_ToolResultBlock(tool_use_id="t1",
+                                               content=[{"type": "text", "text": "MSFT report body."}])]),
+        _message_start(), _delta("Next: your risk attitude and horizon."),
+        _AssistantMessage(content=[_TextBlock(text="Next: your risk attitude and horizon.")]),
+        _ResultMessage(result="Next: your risk attitude and horizon."),
+    ]
+
+    async def query(prompt, options):
+        assert prompt == "Analyze MSFT for me."
+        assert options["include_partial_messages"] is True
+        assert options["allowed_tools"][0] == "mcp__advisor__analyze_market"
+        for event in events:
+            yield event
+
+    c.query = query
+    # a memory context, so the gate sees the message and offers the data analyst
+    _mem, restore = _with(_Memory(text="Analyze MSFT for me."))
+    try:
+        reply = _collect(c, "Analyze MSFT for me.", _ctx())
+    finally:
+        restore()
+    # the text streamed once (not again from the assistant message), the report shown
+    # under the analyst's name with the MCP prefix stripped, a blank line either side
+    assert reply == (
+        "Let's start with the market analysis.\n\n"
+        "### Market analysis — from the data analyst\n\nMSFT report body.\n\n"
+        "Next: your risk attitude and horizon."
+    )
+
+
+def test_a_claude_run_that_streamed_nothing_falls_back_to_the_result(claude_stubbed):
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    async def query(prompt, options):
+        yield _AssistantMessage(content=[_TextBlock(text="Hello Dana.")])
+        yield _ResultMessage(result="Hello Dana.")
+
+    c.query = query
+    assert _collect(c, "Hi", _ctx()) == "Hello Dana."
+
+
+def test_the_earlier_turns_go_in_with_the_message(claude_stubbed):
+    # every SDK run is a new session, so the conversation travels in the prompt
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    ctx = _ctx(history=[{"role": "user", "content": "Analyze MSFT."},
+                        {"role": "assistant", "content": "Here is the analysis."}])
+    prompt = c._prompt(ctx, types.SimpleNamespace(text="Moderate, long-term."))
+    assert prompt == ("Conversation so far:\nuser: Analyze MSFT.\nassistant: Here is the analysis."
+                      "\n\nuser: Moderate, long-term.")
+    assert c._prompt(_ctx(), types.SimpleNamespace(text="Hi")) == "Hi"
+
+
+def test_nobody_identified_is_asked_and_no_claude_run_starts(claude_stubbed):
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    async def query(prompt, options):
+        raise AssertionError("the model ran")
+        yield  # noqa: RET503 -- an async generator
+
+    c.query = query
+    reply = _collect(c, "Analyze NVDA for me.",
+                     _ctx(has_subject=False, subject_source="conversation", subject="conv-1"))
+    assert "email address" in reply and "dana@example.com" in reply
+
+
+def test_an_analyst_the_turn_did_not_ask_for_is_not_on_the_server(claude_stubbed):
+    # Offered and refused, the call stayed in the trace, and "only the analysts the
+    # step needs" failed a turn that behaved correctly. A tool the model is never
+    # shown cannot be called.
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    ctx = _Memory(text="Analyze MSFT for me.")
+    _mem, restore = _with(ctx)
+    try:
+        offered = [t.name for t in c._tools_this_turn()]
+        assert offered[:1] == ["analyze_market"]
+        assert "propose_strategies" not in offered and "assess_risk" not in offered
+        ctx.request.text = "Propose strategies for MSFT."
+        offered = [t.name for t in c._tools_this_turn()]
+        assert offered[:2] == ["analyze_market", "propose_strategies"]
+        assert "plan_execution" not in offered
+    finally:
+        restore()

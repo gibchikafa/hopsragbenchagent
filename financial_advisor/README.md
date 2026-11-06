@@ -15,6 +15,7 @@ coordinator ─┬─▶ analyze_market      data_analyst:      web search → m
 |---|---|
 | `advisor_agent.py` | The coordinator (a LangGraph ReAct agent) with the analysts as its tools, served by `AgentApp` |
 | `advisor_agent_openai.py` | The same on the OpenAI Agents SDK: the analysts are `Agent`s run by the coordinator's tools, the data analyst with the SDK's web search |
+| `advisor_agent_claude.py` | The same on the Claude Agent SDK: the coordinator is one SDK run per turn with the analysts on an in-process MCP server, each analyst its own run, the data analyst with the built-in `WebSearch` |
 | `advisor_memory.py` | The reports in working memory, shared by both entry points |
 | `prompts.py` | The recipe's prompts, ported; what changed and why is in its docstring |
 | `evaluation/` | The recipe's evaluation cases as Hopsworks suites, three more the recipe could not express, and the rubric a judge grades live traffic by |
@@ -40,12 +41,35 @@ Only the coordinator speaks to the user. The analysts' model calls are tagged
 and their tokens filtered out of the stream, so a report reaches the user once,
 explained by the coordinator, rather than twice.
 
-## Two entry points
+## Three entry points
 
 `advisor_agent.py` runs on LangGraph with Claude and its web search; `advisor_agent_openai.py`
 on the OpenAI Agents SDK with `gpt-6-luna` and the SDK's `WebSearchTool` (`OPENAI_API_KEY`),
-or any LiteLLM model name in `ADVISOR_OPENAI_MODEL`. Both keep the reports in the same
-working-memory keys, so either can continue a plan the other started.
+or any LiteLLM model name in `ADVISOR_OPENAI_MODEL`; `advisor_agent_claude.py` on the
+Claude Agent SDK with `claude-opus-5-5` (`ADVISOR_CLAUDE_MODEL`). All three keep the reports
+in the same working-memory keys, so any can continue a plan another started.
+
+The Claude Agent SDK one differs in how the pieces run, and each difference is the SDK's shape:
+
+- **Every run is a Claude Code session** with every built-in tool switched off
+  (`tools=[]`) and no settings read from the pod (`setting_sources=[]`): the
+  coordinator gets only what is on its in-process MCP server, which the trace names
+  `mcp__advisor__analyze_market` and so on. The suites' `analysts_in_order` and
+  `only_the_analysts_needed` expectations name the bare tools, as the LangGraph entry
+  point reports them.
+- **A session has no history**, so the kept turns go in with the message as a
+  transcript, and the folded ones as the SDK's summary in the system prompt, the
+  same `ctx.system_context()` the others use.
+- **An analyst the turn did not ask for is not on the server.** The OpenAI entry
+  point hides it with `is_enabled`; here the server is built per turn from
+  `advisor_memory.not_this_turn`, which has what it needs at the start of the turn.
+  The guard in each analyst still refuses, as a second line.
+- **The data analyst's searches are capped by a hook**, not by `max_turns`: a run
+  that hits its turn cap ends with the error as its report, while a refused
+  `WebSearch` tells the model why and leaves it to write from what it has read.
+- **It signs in as Claude Code does**: `ANTHROPIC_API_KEY`, or the Claude Code
+  login the deployment form connects (`CLAUDE_CODE_OAUTH_TOKEN`). The memory
+  summariser is the Anthropic SDK and needs the API key either way.
 
 ## Who it is talking to
 
@@ -152,8 +176,10 @@ disclaimer` are written.
 |---|---|
 | `ANTHROPIC_API_KEY` | `advisor_agent.py`: the analysts, the coordinator and the memory summariser all run on Claude. Web search must be enabled for the key's organisation. |
 | `OPENAI_API_KEY` | `advisor_agent_openai.py`: the agents, the web search and the memory summariser (`openai_summarizer`). |
-| `ADVISOR_MODEL` | Model for the coordinator and the analysts. Default `claude-sonnet-4-5`. |
-| `ADVISOR_MAX_SEARCHES` | Web searches the data analyst may run per report. Default 8; each is a paid call. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `advisor_agent_claude.py`: set by the platform when the deployment is connected to a Claude Code login; `ANTHROPIC_API_KEY` wins when both are present. |
+| `ADVISOR_MODEL` | `advisor_agent.py`: model for the coordinator and the analysts. Default `claude-sonnet-4-5`. |
+| `ADVISOR_CLAUDE_MODEL` | `advisor_agent_claude.py`: model for the coordinator and the analysts, as a full id or a CLI alias (`opus`, `sonnet`). Default `claude-opus-5-5`. |
+| `ADVISOR_MAX_SEARCHES` | Web searches the data analyst may run per report (both Claude entry points). Default 8; each is a paid call. |
 
 ## Evaluation
 
