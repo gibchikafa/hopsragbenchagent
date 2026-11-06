@@ -1015,9 +1015,16 @@ def claude_stubbed(stubbed, monkeypatch):
     sdk.StreamEvent = _StreamEvent
     protocol = sys.modules["hopsworks_agents.protocol"]
     protocol.AgentApp = lambda **kw: types.SimpleNamespace(stream=lambda fn: fn, chat=lambda fn: fn, kwargs=kw)
+    protocol.AgentError = _FakeAgentError
     for name in ("advisor_memory", "advisor_agent_claude"):
         sys.modules.pop(name, None)
     yield
+
+
+class _FakeAgentError(Exception):
+    def __init__(self, message, code=None, status_code=None):
+        super().__init__(message)
+        self.code, self.status_code = code, status_code
 
 
 def _delta(text):
@@ -1218,3 +1225,31 @@ def test_an_analyst_the_turn_did_not_ask_for_is_not_on_the_server(claude_stubbed
         assert "plan_execution" not in offered
     finally:
         restore()
+
+
+def test_a_run_that_cannot_reach_the_model_fails_with_claude_codes_reason(claude_stubbed):
+    # In g1 the login token was rejected and the handler died with the SDK's
+    # "Claude Code returned an error result: success" -- the result's subtype, not
+    # the cause. The cause is one message earlier, synthetic, carrying `error`.
+    import asyncio  # noqa: PLC0415
+
+    import advisor_agent_claude as c  # noqa: PLC0415
+
+    reason = "Failed to authenticate. API Error: 401 OAuth access token is invalid."
+
+    async def query(prompt, options):
+        yield _AssistantMessage(content=[_TextBlock(text=reason)], error="authentication_failed")
+        raise Exception("Claude Code returned an error result: success")
+
+    c.query = query
+    # an analyst: the tool returns the reason to the model
+    with pytest.raises(RuntimeError, match="401 OAuth access token is invalid"):
+        asyncio.run(c._run("brief", {}))
+    # the coordinator: the reply's error is the reason, as an AgentError
+    _mem, restore = _with(_Memory(text="Hi"))
+    try:
+        with pytest.raises(_FakeAgentError, match="401 OAuth access token is invalid") as raised:
+            _collect(c, "Hi", _ctx())
+    finally:
+        restore()
+    assert raised.value.status_code == 502

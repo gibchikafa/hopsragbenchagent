@@ -146,22 +146,43 @@ def _text_of(blocks: Any) -> str:
     return "".join(parts)
 
 
+def _failure(message: AssistantMessage, failure: str) -> str:
+    """Claude Code's own account of a run that is failing, or what was known before.
+
+    A run that cannot reach the model -- a rejected login, a model the account
+    cannot use -- ends with the SDK raising "Claude Code returned an error result:
+    success": the result's subtype, not the cause. The cause came one message
+    earlier, as a synthetic assistant message carrying `error` and the text to show
+    ("Failed to authenticate. API Error: 401 OAuth access token is invalid."), so
+    it is kept and reported in place of the SDK's line.
+    """
+    if not getattr(message, "error", None):
+        return failure
+    return _text_of(message.content).strip() or str(message.error)
+
+
 async def _run(prompt: str, options: ClaudeAgentOptions) -> str:
     """One run to completion, returning its final text.
 
     The result message carries the final answer; a run that ended in an error (the
     turn cap, a refused request) carries the error there instead, so the last thing
-    the model wrote is what is returned then.
+    the model wrote is what is returned then. A run that failed outright raises,
+    with Claude Code's reason.
     """
     final = ""
     last = ""
-    async for message in query(prompt=prompt, options=options):
-        if isinstance(message, AssistantMessage):
-            text = _text_of(message.content).strip()
-            if text:
-                last = text
-        elif isinstance(message, ResultMessage) and not message.is_error:
-            final = str(message.result or "")
+    failure = ""
+    try:
+        async for message in query(prompt=prompt, options=options):
+            if isinstance(message, AssistantMessage):
+                failure = _failure(message, failure)
+                text = _text_of(message.content).strip()
+                if text and not getattr(message, "error", None):
+                    last = text
+            elif isinstance(message, ResultMessage) and not message.is_error:
+                final = str(message.result or "")
+    except Exception as err:
+        raise RuntimeError(failure or str(err)) from err
     return (final or last).strip()
 
 
@@ -458,50 +479,62 @@ async def stream(request, ctx):
     paragraph_break = False
     called: dict[str, str] = {}  # tool use id -> tool name, to name a report when it returns
     final = ""
-    async for message in query(prompt=_prompt(ctx, request), options=options):
-        if isinstance(message, StreamEvent):
-            event = message.event or {}
-            if event.get("type") == "message_start":
-                paragraph_break = bool(spoken.strip())
-                continue
-            delta = event.get("delta") or {}
-            if event.get("type") != "content_block_delta" or delta.get("type") != "text_delta":
-                continue
-            text = delta.get("text") or ""
-            if not text:
-                continue
-            if paragraph_break and not spoken.endswith("\n\n"):
-                spoken += "\n\n"
-                yield "\n\n"
-            paragraph_break = False
-            spoken += text
-            streamed = True
-            yield text
-        elif isinstance(message, AssistantMessage):
-            # its text streamed above; what is left to read here is the tool calls
-            for block in message.content:
-                if isinstance(block, ToolUseBlock):
-                    name = block.name.rsplit("__", 1)[-1]
-                    called[block.id] = name
-                    await ctx.emit_event(name, status="running",
-                                         message=str(block.input or "")[:200], event_id=block.id)
-        elif isinstance(message, UserMessage) and isinstance(message.content, list):
-            for block in message.content:
-                if not isinstance(block, ToolResultBlock):
+    failure = ""
+    try:
+        async for message in query(prompt=_prompt(ctx, request), options=options):
+            if isinstance(message, StreamEvent):
+                event = message.event or {}
+                if event.get("type") == "message_start":
+                    paragraph_break = bool(spoken.strip())
                     continue
-                name = called.get(block.tool_use_id, "")
-                await ctx.emit_event(name or "tool", status="done", event_id=block.tool_use_id)
-                # The report itself, on the screen as soon as the analyst returns: see
-                # advisor_memory.presented for why this is not left to the model.
-                report = mem.presented(name, _text_of(block.content))
-                if report:
-                    block_text = ("\n\n" if spoken.strip() and not spoken.endswith("\n\n") else "") + report
-                    spoken += block_text
-                    streamed = True
-                    paragraph_break = True
-                    yield block_text
-        elif isinstance(message, ResultMessage) and not message.is_error:
-            final = str(message.result or "").strip()
+                delta = event.get("delta") or {}
+                if event.get("type") != "content_block_delta" or delta.get("type") != "text_delta":
+                    continue
+                text = delta.get("text") or ""
+                if not text:
+                    continue
+                if paragraph_break and not spoken.endswith("\n\n"):
+                    spoken += "\n\n"
+                    yield "\n\n"
+                paragraph_break = False
+                spoken += text
+                streamed = True
+                yield text
+            elif isinstance(message, AssistantMessage):
+                failure = _failure(message, failure)
+                # its text streamed above; what is left to read here is the tool calls
+                for block in message.content:
+                    if isinstance(block, ToolUseBlock):
+                        name = block.name.rsplit("__", 1)[-1]
+                        called[block.id] = name
+                        await ctx.emit_event(name, status="running",
+                                             message=str(block.input or "")[:200], event_id=block.id)
+            elif isinstance(message, UserMessage) and isinstance(message.content, list):
+                for block in message.content:
+                    if not isinstance(block, ToolResultBlock):
+                        continue
+                    name = called.get(block.tool_use_id, "")
+                    await ctx.emit_event(name or "tool", status="done", event_id=block.tool_use_id)
+                    # The report itself, on the screen as soon as the analyst returns: see
+                    # advisor_memory.presented for why this is not left to the model.
+                    report = mem.presented(name, _text_of(block.content))
+                    if report:
+                        block_text = ("\n\n" if spoken.strip() and not spoken.endswith("\n\n") else "") + report
+                        spoken += block_text
+                        streamed = True
+                        paragraph_break = True
+                        yield block_text
+            elif isinstance(message, ResultMessage) and not message.is_error:
+                final = str(message.result or "").strip()
+    except Exception as err:
+        # The cause in Claude Code's words -- a rejected login, a model the account
+        # cannot use -- as the reply's error, rather than a traceback whose last
+        # line says the result's subtype was "success".
+        raise AgentError(
+            f"Claude Code could not run the advisor: {failure or err}",
+            code="upstream_error",
+            status_code=502,
+        ) from err
 
     if not streamed:
         yield final or "Sorry — I wasn't able to put together a reply just then. Could you try rephrasing?"
